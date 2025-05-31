@@ -12,6 +12,11 @@ from openai import OpenAI
 import re
 import numpy as np
 import pandas as pd
+import cv2
+import numpy as np
+from reportlab.pdfgen import canvas
+from paddleocr import PaddleOCR
+import os
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 st.set_page_config(layout="wide")
@@ -47,6 +52,49 @@ def segment_image(image_pil):
         segment_paths.append(temp_file.name)
 
     return segment_paths
+
+# Initialize OCR once
+ocr = PaddleOCR(
+    use_doc_orientation_classify=False,
+    use_doc_unwarping=False,
+    use_textline_orientation=False
+)
+
+def apply_ocr_and_generate_pdfs(segment_paths):
+    pdf_paths = []
+
+    for image_path in segment_paths:
+        image = cv2.imread(image_path)
+        height, width = image.shape[:2]
+
+        results = ocr.predict(image_path)
+        res = results[0]  # Only one image at a time
+
+        texts = res['rec_texts']
+        scores = res['rec_scores']
+        boxes = res['rec_polys']  # [N, 4, 2]
+
+        # Prepare PDF path
+        pdf_path = image_path.replace(".jpg", ".pdf")
+        c = canvas.Canvas(pdf_path, pagesize=(width, height))
+
+        for text, score, box in zip(texts, scores, boxes):
+            if not text.strip():
+                continue
+
+            x, y = box[0]  # top-left of the quadrilateral box
+            flipped_y = height - y
+            box_height = np.linalg.norm(np.array(box[3]) - np.array(box[0]))
+            font_size = max(6, int(box_height * 0.8))
+
+            c.setFont("Helvetica", font_size)
+            c.drawString(x, flipped_y, text)
+
+        c.save()
+        print(f"OCR text written to: {pdf_path}")
+        pdf_paths.append(pdf_path)
+
+    return pdf_paths
 
 def encode_image_base64(image_path):
     with open(image_path, "rb") as f:
@@ -101,6 +149,34 @@ def get_prompt_for_segment(seg_id):
 }"""
     }
     return prompts.get(seg_id, "")
+
+def answer_question_with_pdf(model_name, pdf_path):
+    context = extract_text_from_pdf(pdf_path)
+    model_name = "Meta-Llama-3-8B-Instruct.Q4_0.gguf"
+    model = GPT4All(model_name)
+
+    prompt = f"""Extract the following fields from the document below and return the result strictly in this JSON format:
+
+    {{
+      "Date": {{"Day": "", "Month": "", "Year": ""}},
+      "Type of Account": "",
+      "Principal Account Holder": {{
+        "Name": "", "Father's/Husband's Name": "", "Mother's Maiden Name": "",
+        "CNIC/NICOP/Passport No": "", "Issuance Date": "", "Expiry Date": "",
+        "Date of Birth": "", "Marital Status": "", "Religion": "", "Place of Birth": "",
+        "Nationality": "", "Dual Nationality": "",
+        "Mailing Address": {{"Street": "", "City": "", "Country": ""}},
+        "Current Address": {{"Street": "", "City": "", "Country": ""}}
+      }}
+    }}
+
+    Context:
+    {context}
+
+    Return only the JSON. Do not explain anything else.
+    """
+
+    answer = model.generate(prompt)
 
 def call_gpt_vision(image_path, seg_id, api_key):
     base64_image = encode_image_base64(image_path)
@@ -175,21 +251,23 @@ if uploaded_file and OPENAI_API_KEY:
 
     with st.spinner("Processing image..."):
         segments = segment_image(image_pil)
+        pdf_paths = apply_ocr_and_generate_pdfs(segments)
+        print("Generated PDF paths:", pdf_paths)
 
-    all_data = {}
-    for idx, seg_path in enumerate(segments, start=1):
-        data = call_gpt_vision(seg_path, idx, OPENAI_API_KEY)
+    # all_data = {}
+    # for idx, seg_path in enumerate(segments, start=1):
+    #     data = call_gpt_vision(seg_path, idx, OPENAI_API_KEY)
 
-        if "error" in data:
-            st.error(data["error"])
-            st.text(data["raw"])
-        else:
-            all_data.update(data)
+    #     if "error" in data:
+    #         st.error(data["error"])
+    #         st.text(data["raw"])
+    #     else:
+    #         all_data.update(data)
 
-    st.success("✅ All segments processed.")
-    flat_data = flatten_dict(all_data)
-    df = pd.DataFrame(list(flat_data.items()), columns=["Field", "Value"])
-    st.dataframe(df, use_container_width=True)
+    # st.success("✅ All segments processed.")
+    # flat_data = flatten_dict(all_data)
+    # df = pd.DataFrame(list(flat_data.items()), columns=["Field", "Value"])
+    # st.dataframe(df, use_container_width=True)
 
 elif uploaded_file:
     st.warning("Please enter your credentials.")
