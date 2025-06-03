@@ -54,11 +54,11 @@ def segment_image(image_pil):
     return segment_paths
 
 # Initialize OCR once
-ocr = PaddleOCR(
-    use_doc_orientation_classify=False,
-    use_doc_unwarping=False,
-    use_textline_orientation=False
-)
+# ocr = PaddleOCR(
+#     use_doc_orientation_classify=False,
+#     use_doc_unwarping=False,
+#     use_textline_orientation=False
+# )
 
 def apply_ocr_and_generate_pdfs(segment_paths):
     pdf_paths = []
@@ -138,7 +138,7 @@ def get_prompt_for_segment(seg_id):
     }
   }
 }""",
-        3: """In allocation scheme add all that are ticked. Leave blank if none is ticked. Extract this structure only:
+        3: """In allocation scheme add all that are ticked/checked. Leave blank if none is ticked. Extract this structure only:
 {
   "Special Instructions": {
     "Account Operating Instructions": "", "Dividend Mandate": "", "Communication Mode": "", "Stock Dividend": ""
@@ -251,23 +251,23 @@ if uploaded_file and OPENAI_API_KEY:
 
     with st.spinner("Processing image..."):
         segments = segment_image(image_pil)
-        pdf_paths = apply_ocr_and_generate_pdfs(segments)
-        print("Generated PDF paths:", pdf_paths)
+        # pdf_paths = apply_ocr_and_generate_pdfs(segments)
+        # print("Generated PDF paths:", pdf_paths)
 
-    # all_data = {}
-    # for idx, seg_path in enumerate(segments, start=1):
-    #     data = call_gpt_vision(seg_path, idx, OPENAI_API_KEY)
+    all_data = {}
+    for idx, seg_path in enumerate(segments, start=1):
+        data = call_gpt_vision(seg_path, idx, OPENAI_API_KEY)
 
-    #     if "error" in data:
-    #         st.error(data["error"])
-    #         st.text(data["raw"])
-    #     else:
-    #         all_data.update(data)
+        if "error" in data:
+            st.error(data["error"])
+            st.text(data["raw"])
+        else:
+            all_data.update(data)
 
-    # st.success("✅ All segments processed.")
-    # flat_data = flatten_dict(all_data)
-    # df = pd.DataFrame(list(flat_data.items()), columns=["Field", "Value"])
-    # st.dataframe(df, use_container_width=True)
+    st.success("✅ All segments processed.")
+    flat_data = flatten_dict(all_data)
+    df = pd.DataFrame(list(flat_data.items()), columns=["Field", "Value"])
+    st.dataframe(df, use_container_width=True)
 
 elif uploaded_file:
     st.warning("Please enter your credentials.")
