@@ -20,7 +20,7 @@ import os
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 st.set_page_config(layout="wide")
-st.title("📄 Form Segmentation & Extraction")
+st.title("📄 Meezan Bank Investor Account Opening Form for Individual AI Extractor")
 
 # --- Helper Functions ---
 
@@ -264,7 +264,7 @@ if uploaded_file and OPENAI_API_KEY:
         else:
             all_data.update(data)
 
-    st.success("✅ All segments processed.")
+    st.success("✅ Bank Form Processed.")
     flat_data = flatten_dict(all_data)
     df = pd.DataFrame(list(flat_data.items()), columns=["Field", "Value"])
     st.dataframe(df, use_container_width=True)
