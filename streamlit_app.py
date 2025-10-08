@@ -5,24 +5,78 @@ from pytesseract import Output
 from PIL import Image
 import openai
 import base64
+import ollama
 import tempfile
 import json
+import io
 import os
 from openai import OpenAI
 import re
 import numpy as np
 import pandas as pd
 import cv2
+import requests
 import numpy as np
+from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-from paddleocr import PaddleOCR
+from reportlab.lib import colors
+from reportlab.platypus import Table, TableStyle, Frame, Paragraph
+from reportlab.lib.units import inch
 import os
+from reportlab.lib.styles import getSampleStyleSheet
+import pandas as pd
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase import pdfmetrics
+from reportlab.lib.styles import ParagraphStyle
+# from paddleocr import PaddleOCR
+import os
+import hashlib
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 st.set_page_config(layout="wide")
 st.title("📄 Meezan Bank Investor Account Opening Form for Individual AI Extractor")
 
 # --- Helper Functions ---
+def file_hash(file_obj):
+    return hashlib.md5(file_obj.getbuffer()).hexdigest()
+def display_dict(data):
+    for key, value in data.items():
+        if isinstance(value, dict):
+            st.subheader(key)
+            #print(" " * indent + f"{key}:")  # heading
+            display_dict(value)  # recursive call with indentation
+        else:
+            st.write(f"{key}: {value}")
+            #print(" " * indent + f"{key}: {value}")
+# ---- Parse Markdown into dict ----
+def parse_response(text):
+    data = {}
+
+    # Match patterns like **Field:** value
+    matches = re.findall(r"\*\*(.+?)\*\*:\s*([^\n]+)", text)
+    for field, value in matches:
+        data[field.strip()] = value.strip()
+
+    return data
+
+
+
+def render_dict(d, prefix=""):
+    """Recursively render dictionary fields as editable Streamlit inputs"""
+    updated = {}
+    for key, value in d.items():
+        field_key = f"{prefix}{key}"
+        if isinstance(value, dict):
+            st.subheader(key)
+            updated[key] = render_dict(value, prefix=field_key + ".")
+        else:
+            # Choose appropriate input type
+            if value in ["Single", "Married", "Yes", "No"]:
+                options = ["Single", "Married"] if key.lower() == "marital status" else ["Yes", "No"]
+                updated[key] = st.selectbox(key, options, index=options.index(value))
+            else:
+                updated[key] = st.text_input(key, value=str(value))
+    return updated
 
 def find_heading_y(image_gray, heading_text):
     ocr_data = pytesseract.image_to_data(image_gray, output_type=Output.DICT)
@@ -30,6 +84,163 @@ def find_heading_y(image_gray, heading_text):
         if heading_text.lower() in word.lower():
             return ocr_data['top'][i]
     return None
+
+def save_to_pdf(data_dict1, data_dict2, data_dict3):
+    PAGE_WIDTH, PAGE_HEIGHT = A4
+    pdf_file = "bank_form_data.pdf"
+    c = canvas.Canvas(pdf_file, pagesize=A4)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 60, "Meezan Bank Account Opening Extracted Data")
+    c.setFont("Helvetica", 10)
+    c.drawString(40, PAGE_HEIGHT - 90, f"Day: {data_dict1.get('Day')} Month: {data_dict1.get('Month')} Year: {data_dict1.get('Year')}")
+    c.drawString(2 * PAGE_WIDTH / 3, PAGE_HEIGHT - 90, f"Type of Account: {data_dict1.get('Type of Account')}")
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, PAGE_HEIGHT - 110, f"PRINICPAL ACCOUNT HOLDER")
+    c.setFont("Helvetica", 10)
+    c.drawString(40, PAGE_HEIGHT - 130, f"Name MR./Mrs./Ms: {data_dict1.get('Name')}")
+    c.drawString(40, PAGE_HEIGHT - 150, f"Father / Husband's Name: {data_dict1.get('Father/Husband Name')}")
+    y = PAGE_HEIGHT - 150
+    c.drawString(PAGE_WIDTH / 2, y, f"Mother's Maiden Name: {data_dict1.get('Mother Maiden Name')}")
+    y-=20
+    c.drawString(40, y, f"CNIC/NICOP/Passport No.: {data_dict1.get('CNIC/NICOP/Passport No')}")
+    y-=20
+    c.drawString(40, y, f"Issuance Date: {data_dict1.get('Issuance Date')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Expiry Date: {data_dict1.get('Expiry Date')}")
+    y-=20
+    c.drawString(40, y, f"Date of Birth: {data_dict1.get('Date of Birth')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Marital Status: {data_dict1.get('Marital Status')}")
+    y-=20
+    c.drawString(40, y, f"Religion: {data_dict1.get('Religion')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Place of Birth: {data_dict1.get('Place of Birth')}")
+    y-=20
+    c.drawString(40, y, f"Nationality: {data_dict1.get('Nationality')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Dual Nationality: {data_dict1.get('Dual Nationality')}")
+    y-=20
+    c.drawString(40, y, f"Mailing Address:")
+    y-=20
+    c.drawString(60, y, f"Street: {data_dict1.get('Mailing Address: Street')}")
+    y-=20
+    c.drawString(60, y, f"City: {data_dict1.get('Mailing Address: City')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Country: {data_dict1.get('Mailing Address: Country')}")
+    y-=20
+    c.drawString(40, y, f"Current Address as per CNIC:")
+    y-=20
+    c.drawString(60, y, f"Street: {data_dict1.get('Current Address: Street')}")
+    y-=20
+    c.drawString(60, y, f"City: {data_dict1.get('Current Address: City')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Country: {data_dict1.get('Current Address: Country')}")
+    y-=20
+    c.drawString(40,y,f"Residential Status {data_dict2.get('Residential Status')}")
+    y-=20
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, f"CONTACT DETAILS")
+    c.setFont("Helvetica", 10)
+    y-=20
+    c.drawString(40, y, f"Email: {data_dict2.get('Email')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Mobile Network: {data_dict2.get('Mobile Network')}")
+    y-=20
+    c.drawString(40, y, f"Mobile: {data_dict2.get('Mobile')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Tel Res/Office: {data_dict2.get('Tel/Res Office')}")
+    y-=20
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(40, y, f"IN CASE OF MINOR ACCOUNT:")
+    y-=20
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"Name of Guardian: {data_dict2.get('In Case of Minor Account: Name of Guardian')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Realtionship with Principal: {data_dict2.get('In Case of Minor Account: Relation with Principal')}")
+    y-=20
+    c.drawString(40, y, f"Guardian CNIC: {data_dict2.get('In Case of Minor Account: Guardian CNIC')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"CNIC Expiry Date : {data_dict2.get('In Case of Minor Account: CNIC Expiry Date')}")
+    y-=20
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(40, y, f"BANK ACCOUNT DETAIL OF PRINICPAL ACCOUNT HOLDER FOR REDEMPTION AND DIVIDEND PAYMENTS")
+    c.setFont("Helvetica", 10)
+    y-=20
+    c.drawString(40, y, f"Bank Account No.(IBAN preferred): {data_dict2.get('Bank Account Detail: Bank Account No.')}")
+    y-=20
+    c.drawString(40, y, f"Bank Name: {data_dict2.get('Bank Account Detail: Bank')}")
+    c.drawString(PAGE_WIDTH / 3, y, f" Branch: {data_dict2.get('Bank Account Detai: Branch')}")
+    c.drawString(2 * PAGE_WIDTH / 3, y, f" City: {data_dict2.get('Bank Account Detail: City')}")
+    y-=20
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, f"JOINT ACCOUNT HOLDERS")
+    c.setFont("Helvetica-Bold", 10)
+    y-=20
+    c.drawString(40, y, f"Joint Holder 1: ")
+    y-=20
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"Realtion with Principal: {data_dict2.get('Joint Account Holders: Joint Holder 1: Relation with Principal')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Customer ID (if any) {data_dict2.get('Joint Account Holders: Joint Holder 1: Customer ID')}")
+    y-=20
+    c.drawString(40, y, f"Name: {data_dict2.get('Joint Account Holders: Joint Holder 1: Name')}")
+    y-=20
+    c.drawString(40, y, f"CNIC/NICOP/Passport No.: {data_dict2.get('Joint Account Holders: Joint Holder 1: CNIC/NICOP/Passport')}")
+    y-=20
+    c.drawString(40, y, f"Issuance Date: {data_dict2.get('Joint Account Holders: Joint Holder 1: Issuance Date')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Expiry Date: {data_dict2.get('Joint Account Holders: Joint Holder 1: Expiry Date')}")
+    y-=20
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(40, y, f"Joint Holder 2:")
+    y-=20
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"Realtion with Principal: {data_dict2.get('Joint Account Holders: Joint Holder 2: Relation with Principal')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Customer ID (if any): {data_dict2.get('Joint Account Holders: Joint Holder 2: Customer ID')}")
+    y-=20
+    c.drawString(40, y, f"Name: {data_dict2.get('Joint Account Holders: Joint Holder 2: Name')}")
+    y-=20
+    c.drawString(40, y, f"CNIC/NICOP/Passport No.: {data_dict2.get('Joint Account Holders: Joint Holder 2: CNIC/NICOP/Passport')}")
+    y-=20
+    c.drawString(40, y, f"Issuance Date: {data_dict2.get('Joint Account Holders: Joint Holder 2: Issuance Date')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Expiry Date: {data_dict2.get('Joint Account Holders: Joint Holder 2: Expiry Date')}")
+    c.showPage()
+    y = PAGE_HEIGHT - 60
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, f"SPECIAL INSTRUCTIONS")
+    y-=20
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"Account Operating Instructions: {data_dict3.get('Account Operating Instructions')}")
+    y-=20
+    c.drawString(40, y, f"Dividend Mandate: {data_dict3.get('Dividend Mandate')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Stock Dividend: {data_dict3.get('Stock Dividend')}")
+    y-=20
+    c.drawString(40, y, f"Communication Mode: {data_dict3.get('Communication Mode')}")
+    y-=20
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(40, y, f"DETAIL ABOUT MEEZAN TAHAFFUZ PENSION FUND (MTPF Account)")
+    y-=20
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"Expected Retirement Date: {data_dict3.get('Expected Retirement Date')}")
+    y-=20
+    c.drawString(40, y, f"Allocation Scheme: {data_dict3.get('Allocation Scheme')}")
+    c.save()
+    return pdf_file
+
+def call_ollama_api_with_image(image_file, prompt, model="llama3.2-vision"):
+    """Call Ollama REST API with image input and vision-capable model"""
+
+    try:
+        # Read image and convert to bytes
+        image = Image.open(image_file)
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG")
+        image_bytes = buffered.getvalue()
+
+        # Call ollama chat
+        response = ollama.chat(
+            model=model,
+            messages=[{
+                "role": "user",
+                "content": prompt,
+                "images": [image_bytes]  # pass bytes directly
+            }]
+        )
+        print(response)
+
+        return response.get("message", {}).get("content", "")
+    
+    except Exception as e:
+        st.error(f"Error using Ollama chat API: {str(e)}")
+        return None
 
 def segment_image(image_pil):
     image_cv = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2GRAY)
@@ -53,48 +264,133 @@ def segment_image(image_pil):
 
     return segment_paths
 
-# Initialize OCR once
-# ocr = PaddleOCR(
-#     use_doc_orientation_classify=False,
-#     use_doc_unwarping=False,
-#     use_textline_orientation=False
-# )
+import re
+def extract_value(text, field):
+    if not isinstance(text, str):
+        return None
+    patterns = [
+        rf"\*\*{re.escape(field)}:\*\* (.+?)(\n|$)",
+        rf"{re.escape(field)}: (.+?)(\n|$)"
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            val = match.group(1).strip()
+            if val.lower() in ["[not provided]", "not applicable", "[not applicable]"]:
+                return None
+            return val
+    return None
+def extract_address_block(response_text: str, addr_type: str) -> dict:
+    """
+    Extracts address components (Street, City, Country) for Mailing/Current Address.
+    """
+    address = {}
+    # Find the block for this address type
+    block_pattern = rf"(?:\*|\+)\s*{re.escape(addr_type)}:\s*(.*?)(?=\n\*|\Z)"
+    block_match = re.search(block_pattern, response_text, re.DOTALL | re.IGNORECASE)
+    if block_match:
+        block_text = block_match.group(1)
 
-def apply_ocr_and_generate_pdfs(segment_paths):
-    pdf_paths = []
+        # Now extract individual components from inside the block
+        for field in ["Street", "City", "Country"]:
+            pattern = rf"(?:\*|\+)\s*{field}:\s*(.*)"
+            match = re.search(pattern, block_text, re.IGNORECASE)
+            if match:
+                address[field] = match.group(1).strip()
+    return address
+def parse_account_opening_response(response_text: str) -> dict:
+    """
+    Parses structured account opening details from Ollama response text.
 
-    for image_path in segment_paths:
-        image = cv2.imread(image_path)
-        height, width = image.shape[:2]
+    Args:
+        response_text (str): The response text from Ollama.
 
-        results = ocr.predict(image_path)
-        res = results[0]  # Only one image at a time
+    Returns:
+        dict: Extracted data in key-value form.
+    """
+    data = {}
 
-        texts = res['rec_texts']
-        scores = res['rec_scores']
-        boxes = res['rec_polys']  # [N, 4, 2]
+    # 3. General fields
+    fields = [
+        "Day","Month","Year","Type of Account","Name", "Father/Husband Name", "Mother Maiden Name", "CNIC/NICOP/Passport No",
+        "Issuance Date", "Expiry Date", "Date of Birth", "Marital Status",
+        "Religion", "Place of Birth", "Nationality", "Dual Nationality",
+    ]
+    for field in fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
 
-        # Prepare PDF path
-        pdf_path = image_path.replace(".jpg", ".pdf")
-        c = canvas.Canvas(pdf_path, pagesize=(width, height))
+    # 4. Mailing and Current Address
+    for addr_type in ["Mailing Address", "Current Address"]:
+        address = extract_address_block(response_text, addr_type)
+        if address:
+            data[addr_type] = address   
 
-        for text, score, box in zip(texts, scores, boxes):
-            if not text.strip():
-                continue
+    return data
 
-            x, y = box[0]  # top-left of the quadrilateral box
-            flipped_y = height - y
-            box_height = np.linalg.norm(np.array(box[3]) - np.array(box[0]))
-            font_size = max(6, int(box_height * 0.8))
 
-            c.setFont("Helvetica", font_size)
-            c.drawString(x, flipped_y, text)
+def parse_account_info(response):
+    parsed = {}
 
-        c.save()
-        print(f"OCR text written to: {pdf_path}")
-        pdf_paths.append(pdf_path)
+    parsed = {
+        "Residential Status": extract_value(response, "Residential Status"),
+        "Email": extract_value(response, "Email"),
+        "Mobile Network": extract_value(response, "Mobile Network"),
+        "Tel/Res Office": extract_value(response, "Tel/Res Office"),
+        "Mobile": extract_value(response, "Mobile")
+    }
 
-    return pdf_paths
+    parsed["In Case of Minor Account"] = {
+        "Name of Guardian": extract_value(response, "Name of Guardian"),
+        "Relation with Principal": extract_value(response, "Relation with Principal"),
+        "Guardian CNIC": extract_value(response, "Guardian CNIC"),
+        "CNIC Expiry Date": extract_value(response, "CNIC Expiry Date")
+    }
+
+    parsed["Bank Account Detail"] = {
+        "Bank Account No.": extract_value(response, "Bank Account No."),
+        "Bank": extract_value(response, "Bank"),
+        "Branch": extract_value(response, "Branch"),
+        "City": extract_value(response, "City")
+    }
+
+    # Extract Joint Account Holder blocks
+    joint_holders = {}
+    matches = re.split(r"\*{0,2}Joint Holder \d:?\*{0,2}", response)
+    if len(matches) > 1:
+        # The first item is text before Joint Holder 1, skip it
+        holder_texts = matches[1:]
+        for idx, block in enumerate(holder_texts, 1):
+            joint_holders[f"Joint Holder {idx}"] = {
+                "Name": extract_value(block, "Name"),
+                "Relation with Principal": extract_value(block, "Relation with Principal"),
+                "Customer ID": extract_value(block, "Customer ID"),
+                "CNIC/NICOP/Passport": extract_value(block, "CNIC/NICOP/Passport"),
+                "Issuance Date": extract_value(block, "Issuance Date"),
+                "Expiry Date": extract_value(block, "Expiry Date")
+            }
+    parsed["Joint Account Holders"] = joint_holders
+
+    return parsed
+def parse_special_instructions(response):
+    parsed = {
+            "Account Operating Instructions": extract_value(response, "Account Operating Instructions"),
+            "Dividend Mandate": extract_value(response, "Dividend Mandate"),
+            "Communication Mode": extract_value(response, "Communication Mode"),
+            "Stock Dividend": extract_value(response, "Stock Dividend"),
+            "Expected Retirement Date": extract_value(response, "Expected Retirement Date"),
+            "Allocation Scheme": []
+    }
+
+    # Handle multiple Allocation Scheme options
+    allocation_section = re.search(r"(?i)Alloca?tion Scheme[:\n]*((?:\*|\-).+?)(\n\n|\Z)", response, re.DOTALL)
+    if allocation_section:
+        allocations = re.findall(r"[\*\-]\s*(.+)", allocation_section.group(1))
+        parsed["Allocation Scheme"] = [a.strip() for a in allocations]
+
+    return parsed
+
 
 def encode_image_base64(image_path):
     with open(image_path, "rb") as f:
@@ -240,34 +536,182 @@ def flatten_dict(d, parent_key='', sep=': '):
 # --- Streamlit App UI ---
 
 #st.sidebar.title("⚙️ Configuration")
-OPENAI_API_KEY = st.secrets["API_KEY"]
+#OPENAI_API_KEY = st.secrets["API_KEY"]
 
 
 uploaded_file = st.file_uploader("📤 Upload scanned form", type=["jpg", "jpeg", "png", "pdf"])
 
-if uploaded_file and OPENAI_API_KEY:
+if uploaded_file:
+    new_hash = file_hash(uploaded_file)
+    # Check if file changed
+    if "file_hash" not in st.session_state or st.session_state.file_hash != new_hash:
+        # Reset session_state for new file
+        print('New File')
+        st.session_state.file_hash = new_hash
+        for key in ["response", "response2", "response3"]:
+            if key in st.session_state:
+                del st.session_state[key]
+    print('re-runned')
     image_pil = Image.open(uploaded_file).convert("RGB")
     st.image(image_pil, caption="Uploaded Form", use_container_width=True)
+    prompt = """Extract the following details from the form in a structured and complete manner:
+* Date: [Your answer here]
+* Day: [Your answer here]
+* Month: [Your answer here]
+* Year: [Your answer here]
+* Type of Account: [Your answer here]
+* Principal Account Holder:
+    * Name: [Your answer here]
+    * Father/Husband Name: [Your answer here]
+    * Mother Maiden Name: [Your answer here]
+    * CNIC/NICOP/Passport No: [Your answer here]
+    * Issuance Date: [Your answer here]
+    * Expiry Date: [Your answer here]
+    * Date of Birth: [Your answer here]
+    * Marital Status: [Your answer here]
+    * Religion: [Your answer here]
+    * Place of Birth: [Your answer here]
+    * Nationality: [Your answer here]
+    * Dual Nationality: [Your answer here]
+* Mailing Address:
+    * Street: [Your answer here]
+    * City: [Your answer here]
+    * Country: [Your answer here]
+* Current Address:
+    * Street: [Your answer here]
+    * City: [Your answer here]
+    * Country: [Your answer here]
 
-    with st.spinner("Processing image..."):
-        segments = segment_image(image_pil)
+Leave any field blank if the information is missing or not available."""
+
+    #response = call_ollama_api_with_image(uploaded_file, prompt)
+    if "response" not in st.session_state:
+        response = call_ollama_api_with_image(uploaded_file, prompt)
+        st.session_state.response = response   
+    prompt2 = "Extract the following details from the form in a structured and complete manner: * Residential Status: [Your answer here] * Email: [Your answer here] * Mobile Network: [Your answer here] * Tel/Res Office: [Your answer here] * Mobile: [Your answer here] * In Case of Minor Account: * Name of Guardian: [Your answer here] * Relation with Principal: [Your answer here] * Guardian CNIC: [Your answer here] * CNIC Expiry Date: [Your answer here] * Bank Account Detail: * Bank Account No.: [Your answer here] * Bank: [Your answer here] * Branch: [Your answer here] * City: [Your answer here] * Joint Account Holders: * Joint Holder 1: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Joint Holder 2: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here]Leave blank if missing"
+    #response2 = call_ollama_api_with_image(uploaded_file, prompt2)
+    if "response2" not in st.session_state:
+        response2 = call_ollama_api_with_image(uploaded_file, prompt2)
+        st.session_state.response2 =  response2
+    prompt3 = """Extract the following details from the form should in a structured and complete manner:
+
+Special Instructions:
+Account Operating Instructions: [e.g., Either or Survivor, Jointly Operated, etc.]
+
+Dividend Mandate: [e.g., Credit to Bank Account, Reinvest, etc.]
+Communication Mode: [e.g., Email, Postal Mail, etc.]
+
+Stock Dividend: [e.g., Yes, No, or method of delivery]
+
+Detail About Meezan Tahaffuz Pension Fund (MTPF) Account:
+Expected Retirement Date: [DD/MM/YYYY]
+
+Allocation Scheme: [List all ticked or checked options, e.g., Equity, Debt, Money Market. Leave blank if none are selected.]
+
+Please ensure only the checked/ticked values are included in the "Allocation Scheme" list. If no boxes are selected, return an empty list."""
+    #response3 = call_ollama_api_with_image(uploaded_file, prompt3)
+    if "response3" not in st.session_state:
+        response3 = call_ollama_api_with_image(uploaded_file, prompt3)
+        st.session_state.response3 = response3
+    # print(response)
+    if "response" in st.session_state:
+        parsed_data = parse_account_opening_response(st.session_state.response)
+        # print('parsed data:',parsed_data)
+        flat_data = flatten_dict(parsed_data)
+        parsed_data2 = parse_account_info(st.session_state.response2)
+        flat_data2 = flatten_dict(parsed_data2)
+        parsed_data3 = parse_special_instructions(st.session_state.response3)
+        flat_data3 = flatten_dict(parsed_data3)
+        # form_data = parse_response(response)
+
+        st.write("### Edited Form Data")
+
+    # ---- Display Editable Form ----
+        with st.form("bank_form"):
+            edited_form = {}
+            edited_form2= {}
+            edited_form3 = {}
+            # Create two columns
+            cols = st.columns(2)
+            # Loop with index to alternate between columns
+            for idx, (field, value) in enumerate(flat_data.items()):
+                col = cols[idx % 2]  # Alternate between col[0] and col[1]
+                with col:
+                    edited_form[field] = st.text_input(field, value)
+            for idx, (field, value) in enumerate(flat_data2.items()):
+                col = cols[idx % 2]  # Alternate between col[0] and col[1]
+                with col:
+                    edited_form2[field] = st.text_input(field, value)
+            for idx, (field, value) in enumerate(flat_data3.items()):
+                col = cols[idx % 2]  # Alternate between col[0] and col[1]
+                with col:
+                    edited_form3[field] = st.text_input(field, value)
+            submitted = st.form_submit_button("Save Form")
+        # print(response2)
+        # print(response3)
+        # st.write("### Response:")
+        st.subheader('Principal Account Holder')
+        st.write(st.session_state.response)
+        # print('edited form', edited_form)
+        st.subheader('Contact Details')
+        parsed_data2 = parse_account_info(st.session_state.response2)
+        # print('parsed data2:',parsed_data2)
+        #flat_data2 =flatten_dict(parsed_data2)
+        display_dict(parsed_data2)
+        parsed_data3 = parse_special_instructions(st.session_state.response3)
+        st.subheader('Special Instructions')
+        # print('parsed data3:',parsed_data3)
+        display_dict(parsed_data3)
+        st.write(st.session_state.response2)
+        st.write(st.session_state.response3)
+        # combined_data = {
+        #         "First Response (Editable)": editable_response,
+        #         "Second Response": response2,
+        #         "Third Response": response3
+        #     }
+        print('Form2',edited_form2)
+        print('form3',edited_form3)
+        pdf_path = save_to_pdf(edited_form, edited_form2, edited_form3)
+        with open(pdf_path, "rb") as f:
+            st.download_button("Download PDF", f, file_name="bank_form_data.pdf", mime="application/pdf")
+    # parsed_data = parse_account_opening_response(response)
+    # parsed_data2 = parse_account_info(response2)
+    # parsed_data3 = parse_special_instructions(response3)
+    # combined_data = {**parsed_data, **parsed_data2}
+    # Flatten the combined dictionary
+    # flat_data = flatten_dict(parsed_data)
+    # flat_data2 =flatten_dict(parsed_data2)
+    # flat_data3 = flatten_dict(parsed_data3)
+
+    # Create a DataFrame
+    # df = pd.DataFrame(list(flat_data.items()), columns=["Field", "Value"])
+    # df2 = pd.DataFrame(list(flat_data2.items()), columns=["Field", "Value"])
+    # df3 = pd.DataFrame(list(flat_data3.items()), columns=["Field", "Value"])
+
+    # Display in Streamlit
+    # st.dataframe(df)
+    # st.dataframe(df2)
+    # st.dataframe(df3)
+
+    # with st.spinner("Processing image..."):
+    #     segments = segment_image(image_pil)
         # pdf_paths = apply_ocr_and_generate_pdfs(segments)
         # print("Generated PDF paths:", pdf_paths)
 
-    all_data = {}
-    for idx, seg_path in enumerate(segments, start=1):
-        data = call_gpt_vision(seg_path, idx, OPENAI_API_KEY)
+    # all_data = {}
+    # for idx, seg_path in enumerate(segments, start=1):
+    #     data = call_gpt_vision(seg_path, idx, OPENAI_API_KEY)
 
-        if "error" in data:
-            st.error(data["error"])
-            st.text(data["raw"])
-        else:
-            all_data.update(data)
+    #     if "error" in data:
+    #         st.error(data["error"])
+    #         st.text(data["raw"])
+    #     else:
+    #         all_data.update(data)
 
-    st.success("✅ Bank Form Processed.")
-    flat_data = flatten_dict(all_data)
-    df = pd.DataFrame(list(flat_data.items()), columns=["Field", "Value"])
-    st.dataframe(df, use_container_width=True)
+    # st.success("✅ Bank Form Processed.")
+    # flat_data = flatten_dict(all_data)
+    # df = pd.DataFrame(list(flat_data.items()), columns=["Field", "Value"])
+    # st.dataframe(df, use_container_width=True)
 
-elif uploaded_file:
-    st.warning("Please enter your credentials.")
+# elif uploaded_file:
+#     st.warning("Please enter your credentials.")
