@@ -1,7 +1,7 @@
 import streamlit as st
 import cv2
-import pytesseract
-from pytesseract import Output
+# import pytesseract
+# from pytesseract import Output
 from PIL import Image
 import openai
 import base64
@@ -32,7 +32,7 @@ from reportlab.lib.styles import ParagraphStyle
 import os
 import hashlib
 
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 st.set_page_config(layout="wide")
 st.title("📄 Bank Account Opening Form for Individual AI Extractor")
 
