@@ -1,11 +1,11 @@
 import streamlit as st
 import cv2
-import pytesseract
-from pytesseract import Output
+# import pytesseract
+# from pytesseract import Output
 from PIL import Image
 import openai
 import base64
-import ollama
+# import ollama
 import tempfile
 import json
 import io
@@ -32,9 +32,9 @@ from reportlab.lib.styles import ParagraphStyle
 import os
 import hashlib
 
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 st.set_page_config(layout="wide")
-st.title("📄 Meezan Bank Investor Account Opening Form for Individual AI Extractor")
+st.title("📄 Bank Account Opening Form for Individual AI Extractor")
 
 # --- Helper Functions ---
 def file_hash(file_obj):
@@ -515,6 +515,51 @@ def call_gpt_vision(image_path, seg_id, api_key):
     except Exception as e:
         return {"error": f"Failed to parse response: {e}", "raw": content}
 
+OPENAI_API_KEY = st.secrets["API_KEY"]
+api_key = OPENAI_API_KEY
+def call_openai_api_with_image(image_file, prompt, model="gpt-4o"):
+    """Call OpenAI GPT-4o API with Streamlit-uploaded image and text prompt."""
+
+    try:
+        # Initialize OpenAI client
+        client = OpenAI(api_key=api_key)
+
+        # Open and re-encode uploaded image file to base64
+        image = Image.open(image_file)
+        buffered = io.BytesIO()
+        image.convert("RGB").save(buffered, format="JPEG")  # ensure JPEG format
+        image_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+        # Compose message content
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_base64}"
+                        },
+                    },
+                ],
+            }
+        ]
+
+        # Call OpenAI GPT-4o chat completion endpoint
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+        )
+
+        # Extract text reply
+        reply = response.choices[0].message.content
+        return reply
+
+    except Exception as e:
+        st.error(f"Error using OpenAI GPT-4o API: {str(e)}")
+        return None
+
 def display_flat_dict(data, prefix=""):
     if isinstance(data, dict):
         for key, value in data.items():
@@ -586,12 +631,12 @@ Leave any field blank if the information is missing or not available."""
 
     #response = call_ollama_api_with_image(uploaded_file, prompt)
     if "response" not in st.session_state:
-        response = call_ollama_api_with_image(uploaded_file, prompt)
+        response = call_openai_api_with_image(uploaded_file, prompt)
         st.session_state.response = response   
     prompt2 = "Extract the following details from the form in a structured and complete manner: * Residential Status: [Your answer here] * Email: [Your answer here] * Mobile Network: [Your answer here] * Tel/Res Office: [Your answer here] * Mobile: [Your answer here] * In Case of Minor Account: * Name of Guardian: [Your answer here] * Relation with Principal: [Your answer here] * Guardian CNIC: [Your answer here] * CNIC Expiry Date: [Your answer here] * Bank Account Detail: * Bank Account No.: [Your answer here] * Bank: [Your answer here] * Branch: [Your answer here] * City: [Your answer here] * Joint Account Holders: * Joint Holder 1: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Joint Holder 2: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here]Leave blank if missing"
     #response2 = call_ollama_api_with_image(uploaded_file, prompt2)
     if "response2" not in st.session_state:
-        response2 = call_ollama_api_with_image(uploaded_file, prompt2)
+        response2 = call_openai_api_with_image(uploaded_file, prompt2)
         st.session_state.response2 =  response2
     prompt3 = """Extract the following details from the form should in a structured and complete manner:
 
@@ -611,7 +656,7 @@ Allocation Scheme: [List all ticked or checked options, e.g., Equity, Debt, Mone
 Please ensure only the checked/ticked values are included in the "Allocation Scheme" list. If no boxes are selected, return an empty list."""
     #response3 = call_ollama_api_with_image(uploaded_file, prompt3)
     if "response3" not in st.session_state:
-        response3 = call_ollama_api_with_image(uploaded_file, prompt3)
+        response3 = call_openai_api_with_image(uploaded_file, prompt3)
         st.session_state.response3 = response3
     # print(response)
     if "response" in st.session_state:

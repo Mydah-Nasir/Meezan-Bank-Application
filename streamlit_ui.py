@@ -565,16 +565,12 @@ if st.session_state.logged_in:
 
     Leave any field blank if the information is missing or not available."""
 
-        #response = call_ollama_api_with_image(uploaded_file, prompt)
         if "response" not in st.session_state:
-            # response = call_ollama_api_with_image(uploaded_file, prompt)
-            response = '**Investor Account Opening Form**\n\n**Date:** 05/2025\n\n**Type of Account:** Single\n\n**Principal Account Holder:**\n\n* **Name:** Syed Bukhari\n* **Father/Husband Name:** Muhammad Usman Bukhari\n* **Mother Maiden Name:** Iqra\n* **CNIC/NICOP/Passport No:** 42201\n* **Issuance Date:** 14/05/2025\n* **Expiry Date:** 20/06/2026\n* **Date of Birth:** 20/08/1997\n* **Marital Status:** Single\n* **Religion:** Muslim\n* **Place of Birth:** Karachi\n* **Nationality:** Pakistani\n* **Dual Nationality:** No\n* **Mailing Address:**\n\t+ **Street:** A-999, Block 3, Johar Karachi\n\t+ **City:** Karachi\n\t+ **Country:** Pakistan\n* **Current Address:**\n\t+ **Street:** A-999, Block 3, Johar Karachi\n\t+ **City:** Karachi\n\t+ **Country:** Pakistan\n\nNote: The form is incomplete, and some fields are left blank.'
+            response = call_ollama_api_with_image(uploaded_file, prompt)
             st.session_state.response = response   
         prompt2 = "Extract the following details from the form in a structured and complete manner: * Residential Status: [Your answer here] * Email: [Your answer here] * Mobile Network: [Your answer here] * Tel/Res Office: [Your answer here] * Mobile: [Your answer here] * In Case of Minor Account: * Name of Guardian: [Your answer here] * Relation with Principal: [Your answer here] * Guardian CNIC: [Your answer here] * CNIC Expiry Date: [Your answer here] * Bank Account Detail: * Bank Account No.: [Your answer here] * Bank: [Your answer here] * Branch: [Your answer here] * City: [Your answer here] * Joint Account Holders: * Joint Holder 1: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Joint Holder 2: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here]Leave blank if missing"
-        #response2 = call_ollama_api_with_image(uploaded_file, prompt2)
         if "response2" not in st.session_state:
-            # response2 = call_ollama_api_with_image(uploaded_file, prompt2)
-            response2 = '* Residential Status: Resident\n* Email: usmanibukhari20@gmail.com\n* Mobile Network: Telenor\n* Tel/Res Office: Not provided\n* Mobile: 0319-3MAI-ICOM\n* In Case of Minor Account: \n  * Name of Guardian: Not provided\n  * Relation with Principal: Not provided\n  * Guardian CNIC: Not provided\n  * CNIC Expiry Date: Not provided\n* Bank Account Detail: \n  * Bank Account No.: 555550\n  * Bank: Not provided\n  * Branch: Johar\n  * City: Karachi\n* Joint Account Holders: \n  * Joint Holder 1: \n    * Name: IGRA AZIZ\n    * Relation with Principal: Mother\n    * Customer ID: Not provided\n    * CNIC/NICOP/Passport: 42201-0780300-5\n    * Issuance Date: 12/16/2008\n    * Expiry Date: 3/8/2026\n  * Joint Holder 2: \n    * Name: Not provided\n    * Relation with Principal: Not provided\n    * Customer ID: Not provided\n    * CNIC/NICOP/Passport: Not provided\n    * Issuance Date: Not provided\n    * Expiry Date: Not provided'
+            response2 = call_ollama_api_with_image(uploaded_file, prompt2)
             st.session_state.response2 =  response2
         prompt3 = """Extract the following details from the form should in a structured and complete manner:
 
@@ -592,10 +588,8 @@ if st.session_state.logged_in:
     Allocation Scheme: [List all ticked or checked options, e.g., Equity, Debt, Money Market. Leave blank if none are selected.]
 
     Please ensure only the checked/ticked values are included in the "Allocation Scheme" list. If no boxes are selected, return an empty list."""
-        #response3 = call_ollama_api_with_image(uploaded_file, prompt3)
         if "response3" not in st.session_state:
-            # response3 = call_ollama_api_with_image(uploaded_file, prompt3)
-            response3 = '**Special Instructions:**\n\n*   **Account Operating Instructions:** Principal Account Holder Only\n*   **Dividend Mandate:** Cash\n*   **Communication Mode:** All communications will be sent electronically\n*   **Stock Dividend:** Yes\n\n**Meezan Tahaffuz Pension Fund (MTPF) Account:**\n\n*   **Expected Retirement Date:** 30/06/2030\n*   **Allocation Scheme:** High Volatility, Low Volatility, 100% Gold\n\nThe above details are extracted from the form.'
+            response3 = call_ollama_api_with_image(uploaded_file, prompt3)
             st.session_state.response3 = response3
         # print(response)
         if "response" in st.session_state:
