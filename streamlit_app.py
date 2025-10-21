@@ -29,12 +29,15 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 from reportlab.lib.styles import ParagraphStyle
 # from paddleocr import PaddleOCR
-import os
 import hashlib
+import streamlit as st
+import numpy as np
+import pandas as pd
+import xgboost as xgb
+from sklearn.preprocessing import StandardScaler
 
 # pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-st.set_page_config(layout="wide")
-st.title("📄 Bank Account Opening Form for Individual AI Extractor")
+st.set_page_config(page_title="Banking AI Tools", layout="wide")
 
 # --- Helper Functions ---
 def file_hash(file_obj):
@@ -583,180 +586,295 @@ def flatten_dict(d, parent_key='', sep=': '):
 #st.sidebar.title("⚙️ Configuration")
 #OPENAI_API_KEY = st.secrets["API_KEY"]
 
+st.sidebar.title("🧭 Navigation")
+page = st.sidebar.radio("Go to:", ["Account Opening Form Extractor", "Credit Score Predictor"])
+if page == "Account Opening Form Extractor":
+    st.title("📄 Bank Account Opening Form for Individual AI Extractor")
+    uploaded_file = st.file_uploader("📤 Upload scanned form", type=["jpg", "jpeg", "png", "pdf"])
 
-uploaded_file = st.file_uploader("📤 Upload scanned form", type=["jpg", "jpeg", "png", "pdf"])
+    if uploaded_file:
+        new_hash = file_hash(uploaded_file)
+        # Check if file changed
+        if "file_hash" not in st.session_state or st.session_state.file_hash != new_hash:
+            # Reset session_state for new file
+            print('New File')
+            st.session_state.file_hash = new_hash
+            for key in ["response", "response2", "response3"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+        print('re-runned')
+        image_pil = Image.open(uploaded_file).convert("RGB")
+        st.image(image_pil, caption="Uploaded Form", use_container_width=True)
+        prompt = """Extract the following details from the form in a structured and complete manner:
+    * Date: [Your answer here]
+    * Day: [Your answer here]
+    * Month: [Your answer here]
+    * Year: [Your answer here]
+    * Type of Account: [Your answer here]
+    * Principal Account Holder:
+        * Name: [Your answer here]
+        * Father/Husband Name: [Your answer here]
+        * Mother Maiden Name: [Your answer here]
+        * CNIC/NICOP/Passport No: [Your answer here]
+        * Issuance Date: [Your answer here]
+        * Expiry Date: [Your answer here]
+        * Date of Birth: [Your answer here]
+        * Marital Status: [Your answer here]
+        * Religion: [Your answer here]
+        * Place of Birth: [Your answer here]
+        * Nationality: [Your answer here]
+        * Dual Nationality: [Your answer here]
+    * Mailing Address:
+        * Street: [Your answer here]
+        * City: [Your answer here]
+        * Country: [Your answer here]
+    * Current Address:
+        * Street: [Your answer here]
+        * City: [Your answer here]
+        * Country: [Your answer here]
 
-if uploaded_file:
-    new_hash = file_hash(uploaded_file)
-    # Check if file changed
-    if "file_hash" not in st.session_state or st.session_state.file_hash != new_hash:
-        # Reset session_state for new file
-        print('New File')
-        st.session_state.file_hash = new_hash
-        for key in ["response", "response2", "response3"]:
-            if key in st.session_state:
-                del st.session_state[key]
-    print('re-runned')
-    image_pil = Image.open(uploaded_file).convert("RGB")
-    st.image(image_pil, caption="Uploaded Form", use_container_width=True)
-    prompt = """Extract the following details from the form in a structured and complete manner:
-* Date: [Your answer here]
-* Day: [Your answer here]
-* Month: [Your answer here]
-* Year: [Your answer here]
-* Type of Account: [Your answer here]
-* Principal Account Holder:
-    * Name: [Your answer here]
-    * Father/Husband Name: [Your answer here]
-    * Mother Maiden Name: [Your answer here]
-    * CNIC/NICOP/Passport No: [Your answer here]
-    * Issuance Date: [Your answer here]
-    * Expiry Date: [Your answer here]
-    * Date of Birth: [Your answer here]
-    * Marital Status: [Your answer here]
-    * Religion: [Your answer here]
-    * Place of Birth: [Your answer here]
-    * Nationality: [Your answer here]
-    * Dual Nationality: [Your answer here]
-* Mailing Address:
-    * Street: [Your answer here]
-    * City: [Your answer here]
-    * Country: [Your answer here]
-* Current Address:
-    * Street: [Your answer here]
-    * City: [Your answer here]
-    * Country: [Your answer here]
+    Leave any field blank if the information is missing or not available."""
 
-Leave any field blank if the information is missing or not available."""
+        #response = call_ollama_api_with_image(uploaded_file, prompt)
+        if "response" not in st.session_state:
+            response = call_openai_api_with_image(uploaded_file, prompt)
+            st.session_state.response = response   
+        prompt2 = "Extract the following details from the form in a structured and complete manner: * Residential Status: [Your answer here] * Email: [Your answer here] * Mobile Network: [Your answer here] * Tel/Res Office: [Your answer here] * Mobile: [Your answer here] * In Case of Minor Account: * Name of Guardian: [Your answer here] * Relation with Principal: [Your answer here] * Guardian CNIC: [Your answer here] * CNIC Expiry Date: [Your answer here] * Bank Account Detail: * Bank Account No.: [Your answer here] * Bank: [Your answer here] * Branch: [Your answer here] * City: [Your answer here] * Joint Account Holders: * Joint Holder 1: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Joint Holder 2: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here]Leave blank if missing"
+        #response2 = call_ollama_api_with_image(uploaded_file, prompt2)
+        if "response2" not in st.session_state:
+            response2 = call_openai_api_with_image(uploaded_file, prompt2)
+            st.session_state.response2 =  response2
+        prompt3 = """Extract the following details from the form should in a structured and complete manner:
 
-    #response = call_ollama_api_with_image(uploaded_file, prompt)
-    if "response" not in st.session_state:
-        response = call_openai_api_with_image(uploaded_file, prompt)
-        st.session_state.response = response   
-    prompt2 = "Extract the following details from the form in a structured and complete manner: * Residential Status: [Your answer here] * Email: [Your answer here] * Mobile Network: [Your answer here] * Tel/Res Office: [Your answer here] * Mobile: [Your answer here] * In Case of Minor Account: * Name of Guardian: [Your answer here] * Relation with Principal: [Your answer here] * Guardian CNIC: [Your answer here] * CNIC Expiry Date: [Your answer here] * Bank Account Detail: * Bank Account No.: [Your answer here] * Bank: [Your answer here] * Branch: [Your answer here] * City: [Your answer here] * Joint Account Holders: * Joint Holder 1: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Joint Holder 2: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here]Leave blank if missing"
-    #response2 = call_ollama_api_with_image(uploaded_file, prompt2)
-    if "response2" not in st.session_state:
-        response2 = call_openai_api_with_image(uploaded_file, prompt2)
-        st.session_state.response2 =  response2
-    prompt3 = """Extract the following details from the form should in a structured and complete manner:
+    Special Instructions:
+    Account Operating Instructions: [e.g., Either or Survivor, Jointly Operated, etc.]
 
-Special Instructions:
-Account Operating Instructions: [e.g., Either or Survivor, Jointly Operated, etc.]
+    Dividend Mandate: [e.g., Credit to Bank Account, Reinvest, etc.]
+    Communication Mode: [e.g., Email, Postal Mail, etc.]
 
-Dividend Mandate: [e.g., Credit to Bank Account, Reinvest, etc.]
-Communication Mode: [e.g., Email, Postal Mail, etc.]
+    Stock Dividend: [e.g., Yes, No, or method of delivery]
 
-Stock Dividend: [e.g., Yes, No, or method of delivery]
+    Detail About Meezan Tahaffuz Pension Fund (MTPF) Account:
+    Expected Retirement Date: [DD/MM/YYYY]
 
-Detail About Meezan Tahaffuz Pension Fund (MTPF) Account:
-Expected Retirement Date: [DD/MM/YYYY]
+    Allocation Scheme: [List all ticked or checked options, e.g., Equity, Debt, Money Market. Leave blank if none are selected.]
 
-Allocation Scheme: [List all ticked or checked options, e.g., Equity, Debt, Money Market. Leave blank if none are selected.]
+    Please ensure only the checked/ticked values are included in the "Allocation Scheme" list. If no boxes are selected, return an empty list."""
+        #response3 = call_ollama_api_with_image(uploaded_file, prompt3)
+        if "response3" not in st.session_state:
+            response3 = call_openai_api_with_image(uploaded_file, prompt3)
+            st.session_state.response3 = response3
+        # print(response)
+        if "response" in st.session_state:
+            parsed_data = parse_account_opening_response(st.session_state.response)
+            # print('parsed data:',parsed_data)
+            flat_data = flatten_dict(parsed_data)
+            parsed_data2 = parse_account_info(st.session_state.response2)
+            flat_data2 = flatten_dict(parsed_data2)
+            parsed_data3 = parse_special_instructions(st.session_state.response3)
+            flat_data3 = flatten_dict(parsed_data3)
+            # form_data = parse_response(response)
 
-Please ensure only the checked/ticked values are included in the "Allocation Scheme" list. If no boxes are selected, return an empty list."""
-    #response3 = call_ollama_api_with_image(uploaded_file, prompt3)
-    if "response3" not in st.session_state:
-        response3 = call_openai_api_with_image(uploaded_file, prompt3)
-        st.session_state.response3 = response3
-    # print(response)
-    if "response" in st.session_state:
-        parsed_data = parse_account_opening_response(st.session_state.response)
-        # print('parsed data:',parsed_data)
-        flat_data = flatten_dict(parsed_data)
-        parsed_data2 = parse_account_info(st.session_state.response2)
-        flat_data2 = flatten_dict(parsed_data2)
-        parsed_data3 = parse_special_instructions(st.session_state.response3)
-        flat_data3 = flatten_dict(parsed_data3)
-        # form_data = parse_response(response)
+            st.write("### Edited Form Data")
 
-        st.write("### Edited Form Data")
+        # ---- Display Editable Form ----
+            with st.form("bank_form"):
+                edited_form = {}
+                edited_form2= {}
+                edited_form3 = {}
+                # Create two columns
+                cols = st.columns(2)
+                # Loop with index to alternate between columns
+                for idx, (field, value) in enumerate(flat_data.items()):
+                    col = cols[idx % 2]  # Alternate between col[0] and col[1]
+                    with col:
+                        edited_form[field] = st.text_input(field, value)
+                for idx, (field, value) in enumerate(flat_data2.items()):
+                    col = cols[idx % 2]  # Alternate between col[0] and col[1]
+                    with col:
+                        edited_form2[field] = st.text_input(field, value)
+                for idx, (field, value) in enumerate(flat_data3.items()):
+                    col = cols[idx % 2]  # Alternate between col[0] and col[1]
+                    with col:
+                        edited_form3[field] = st.text_input(field, value)
+                submitted = st.form_submit_button("Save Form")
+            # print(response2)
+            # print(response3)
+            # st.write("### Response:")
+            st.subheader('Principal Account Holder')
+            st.write(st.session_state.response)
+            # print('edited form', edited_form)
+            st.subheader('Contact Details')
+            parsed_data2 = parse_account_info(st.session_state.response2)
+            # print('parsed data2:',parsed_data2)
+            #flat_data2 =flatten_dict(parsed_data2)
+            display_dict(parsed_data2)
+            parsed_data3 = parse_special_instructions(st.session_state.response3)
+            st.subheader('Special Instructions')
+            # print('parsed data3:',parsed_data3)
+            display_dict(parsed_data3)
+            st.write(st.session_state.response2)
+            st.write(st.session_state.response3)
+            # combined_data = {
+            #         "First Response (Editable)": editable_response,
+            #         "Second Response": response2,
+            #         "Third Response": response3
+            #     }
+            print('Form2',edited_form2)
+            print('form3',edited_form3)
+            pdf_path = save_to_pdf(edited_form, edited_form2, edited_form3)
+            with open(pdf_path, "rb") as f:
+                st.download_button("Download PDF", f, file_name="bank_form_data.pdf", mime="application/pdf")
+        # parsed_data = parse_account_opening_response(response)
+        # parsed_data2 = parse_account_info(response2)
+        # parsed_data3 = parse_special_instructions(response3)
+        # combined_data = {**parsed_data, **parsed_data2}
+        # Flatten the combined dictionary
+        # flat_data = flatten_dict(parsed_data)
+        # flat_data2 =flatten_dict(parsed_data2)
+        # flat_data3 = flatten_dict(parsed_data3)
 
-    # ---- Display Editable Form ----
-        with st.form("bank_form"):
-            edited_form = {}
-            edited_form2= {}
-            edited_form3 = {}
-            # Create two columns
-            cols = st.columns(2)
-            # Loop with index to alternate between columns
-            for idx, (field, value) in enumerate(flat_data.items()):
-                col = cols[idx % 2]  # Alternate between col[0] and col[1]
-                with col:
-                    edited_form[field] = st.text_input(field, value)
-            for idx, (field, value) in enumerate(flat_data2.items()):
-                col = cols[idx % 2]  # Alternate between col[0] and col[1]
-                with col:
-                    edited_form2[field] = st.text_input(field, value)
-            for idx, (field, value) in enumerate(flat_data3.items()):
-                col = cols[idx % 2]  # Alternate between col[0] and col[1]
-                with col:
-                    edited_form3[field] = st.text_input(field, value)
-            submitted = st.form_submit_button("Save Form")
-        # print(response2)
-        # print(response3)
-        # st.write("### Response:")
-        st.subheader('Principal Account Holder')
-        st.write(st.session_state.response)
-        # print('edited form', edited_form)
-        st.subheader('Contact Details')
-        parsed_data2 = parse_account_info(st.session_state.response2)
-        # print('parsed data2:',parsed_data2)
-        #flat_data2 =flatten_dict(parsed_data2)
-        display_dict(parsed_data2)
-        parsed_data3 = parse_special_instructions(st.session_state.response3)
-        st.subheader('Special Instructions')
-        # print('parsed data3:',parsed_data3)
-        display_dict(parsed_data3)
-        st.write(st.session_state.response2)
-        st.write(st.session_state.response3)
-        # combined_data = {
-        #         "First Response (Editable)": editable_response,
-        #         "Second Response": response2,
-        #         "Third Response": response3
-        #     }
-        print('Form2',edited_form2)
-        print('form3',edited_form3)
-        pdf_path = save_to_pdf(edited_form, edited_form2, edited_form3)
-        with open(pdf_path, "rb") as f:
-            st.download_button("Download PDF", f, file_name="bank_form_data.pdf", mime="application/pdf")
-    # parsed_data = parse_account_opening_response(response)
-    # parsed_data2 = parse_account_info(response2)
-    # parsed_data3 = parse_special_instructions(response3)
-    # combined_data = {**parsed_data, **parsed_data2}
-    # Flatten the combined dictionary
-    # flat_data = flatten_dict(parsed_data)
-    # flat_data2 =flatten_dict(parsed_data2)
-    # flat_data3 = flatten_dict(parsed_data3)
+        # Create a DataFrame
+        # df = pd.DataFrame(list(flat_data.items()), columns=["Field", "Value"])
+        # df2 = pd.DataFrame(list(flat_data2.items()), columns=["Field", "Value"])
+        # df3 = pd.DataFrame(list(flat_data3.items()), columns=["Field", "Value"])
 
-    # Create a DataFrame
-    # df = pd.DataFrame(list(flat_data.items()), columns=["Field", "Value"])
-    # df2 = pd.DataFrame(list(flat_data2.items()), columns=["Field", "Value"])
-    # df3 = pd.DataFrame(list(flat_data3.items()), columns=["Field", "Value"])
+        # Display in Streamlit
+        # st.dataframe(df)
+        # st.dataframe(df2)
+        # st.dataframe(df3)
 
-    # Display in Streamlit
-    # st.dataframe(df)
-    # st.dataframe(df2)
-    # st.dataframe(df3)
+        # with st.spinner("Processing image..."):
+        #     segments = segment_image(image_pil)
+            # pdf_paths = apply_ocr_and_generate_pdfs(segments)
+            # print("Generated PDF paths:", pdf_paths)
 
-    # with st.spinner("Processing image..."):
-    #     segments = segment_image(image_pil)
-        # pdf_paths = apply_ocr_and_generate_pdfs(segments)
-        # print("Generated PDF paths:", pdf_paths)
+        # all_data = {}
+        # for idx, seg_path in enumerate(segments, start=1):
+        #     data = call_gpt_vision(seg_path, idx, OPENAI_API_KEY)
 
-    # all_data = {}
-    # for idx, seg_path in enumerate(segments, start=1):
-    #     data = call_gpt_vision(seg_path, idx, OPENAI_API_KEY)
+        #     if "error" in data:
+        #         st.error(data["error"])
+        #         st.text(data["raw"])
+        #     else:
+        #         all_data.update(data)
 
-    #     if "error" in data:
-    #         st.error(data["error"])
-    #         st.text(data["raw"])
-    #     else:
-    #         all_data.update(data)
+        # st.success("✅ Bank Form Processed.")
+        # flat_data = flatten_dict(all_data)
+        # df = pd.DataFrame(list(flat_data.items()), columns=["Field", "Value"])
+        # st.dataframe(df, use_container_width=True)
 
-    # st.success("✅ Bank Form Processed.")
-    # flat_data = flatten_dict(all_data)
-    # df = pd.DataFrame(list(flat_data.items()), columns=["Field", "Value"])
-    # st.dataframe(df, use_container_width=True)
+    # elif uploaded_file:
+    #     st.warning("Please enter your credentials.")
+elif page == "Credit Score Predictor":
+    st.title("💳 Credit Score Predictor")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.header("Estimate Your Credit Score")
+        st.write("""
+        Your credit score is one of the most important numbers in your financial life. 
+        It can determine whether you can get financing and can mean the difference between 
+        a preferential rate that saves you thousands of dollars or a more expensive loan.
+        """)
 
-# elif uploaded_file:
-#     st.warning("Please enter your credentials.")
+    with col2:
+        st.image("https://ecm.capitalone.com/WCM/creditwise/cw-simulator-banner-b4.d-desktop.png")
+    # Form inputs
+    st.header("Enter Your Information")
+    st.write("Estimate your credit score in about 30 seconds. Just answer a few simple questions about your past credit usage:")
+
+    with st.form("credit_score_form"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            age = st.number_input("Age", min_value=18, max_value=100)
+            annual_income = st.number_input("Annual Income", min_value=0)
+            num_bank_accounts = st.number_input("Number of Bank Accounts", min_value=0)
+            num_credit_cards = st.number_input("Number of Credit Cards", min_value=0)
+            interest_rate = st.number_input("Interest Rate", min_value=0)
+            num_loans = st.number_input("Number of Loans", min_value=0)
+            delay_days = st.number_input("Delay from due date", min_value=0)
+            num_delayed_payments = st.number_input("Number of Delayed Payments", min_value=0)
+            
+        with col2:
+            credit_mix = st.selectbox("Credit Mix", ["Bad", "Standard", "Good"])
+            outstanding_debt = st.number_input("Outstanding Debt", min_value=0)
+            credit_utilization = st.number_input("Credit Utilization Ratio", min_value=0)
+            credit_history_age = st.number_input("Credit History Age", min_value=0)
+            monthly_emi = st.number_input("Total EMI per month", min_value=0)
+            monthly_investment = st.number_input("Amount invested monthly", min_value=0)
+            payment_behavior = st.number_input("Payment Behaviour", min_value=0)
+            monthly_balance = st.number_input("Monthly Balance", min_value=0)
+            payment_min_amount = st.selectbox("Payment of Min Amount", ["Yes", "No", "NM"])
+
+        submitted = st.form_submit_button("Calculate Credit Score")
+
+    if submitted:
+        # Process credit mix
+        credit_mix_map = {"Bad": 1, "Standard": 2, "Good": 3}
+        credit_mix_value = credit_mix_map[credit_mix]
+        
+        # Process payment of min amount
+        pma_nm = 1 if payment_min_amount == "NM" else 0
+        pma_no = 1 if payment_min_amount == "No" else 0 
+        pma_yes = 1 if payment_min_amount == "Yes" else 0
+
+        # Create input dataframe
+        input_data = pd.DataFrame({
+            'Age': [age],
+            'Annual_Income': [annual_income],
+            'Num_Bank_Accounts': [num_bank_accounts],
+            'Num_Credit_Card': [num_credit_cards],
+            'Interest_Rate': [interest_rate],
+            'Num_of_Loan': [num_loans],
+            'Delay_from_due_date': [delay_days],
+            'Num_of_Delayed_Payment': [num_delayed_payments],
+            'Credit_Mix': [credit_mix_value],
+            'Outstanding_Debt': [outstanding_debt],
+            'Credit_Utilization_Ratio': [credit_utilization],
+            'Credit_History_Age': [credit_history_age],
+            'Total_EMI_per_month': [monthly_emi],
+            'Amount_invested_monthly': [monthly_investment],
+            'Payment_Behaviour': [payment_behavior],
+            'Monthly_Balance': [monthly_balance],
+            'PMA_NM': [pma_nm],
+            'PMA_No': [pma_no],
+            'PMA_Yes': [pma_yes]
+        })
+
+        # Scale the features
+        scaler = StandardScaler()
+        scaled_data = pd.DataFrame(scaler.fit_transform(input_data), columns=input_data.columns)
+        
+        # Load model and make prediction
+        model = xgb.Booster()
+        model.load_model('model.h5')
+        dmatrix = xgb.DMatrix(scaled_data)
+        prediction = model.predict(dmatrix)
+
+        # Show results
+        st.header("Results")
+        if prediction == 0:
+            st.error("Credit Score: Poor")
+            st.write("A poor credit score means that you are not eligible for application of loans")
+        elif prediction == 1:
+            st.warning("Credit Score: Standard")
+            st.write("A standard credit score means that you will likely be eligible for application of small amount for loan")
+        else:
+            st.success("Credit Score: Good")
+            st.write("A good credit score means that you will likely be eligible for application of large sum for loan")
+
+    # Additional information section
+    st.markdown("""
+    ## What Is a Credit Score?
+
+    A credit score is tabulated by credit bureaus, who get information from the banks and companies you do business with about your financial payments. Your score is based on five basic things:
+
+    * How often you pay your bills on time and how often you're late (35% of score)
+    * How much you owe (10% of score)
+    * How many types of debts and credit lines you have (10% of score)
+    * Credit history length (15% of score)
+    * Number of recent credit inquiries (10% of score)
+
+    **Note:** Your income is not directly factored into your credit score.
+    """)
