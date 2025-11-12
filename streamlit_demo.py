@@ -650,7 +650,7 @@ if st.session_state.logged_in:
     st.sidebar.button("Logout", on_click=lambda: st.session_state.update(logged_in=False))
     option = st.sidebar.selectbox(
     "Please select the appropriate form type:",
-    ("Meezan Bank Form", "Custom Form"),
+    ("Custom Form","Meezan Bank Form"),
     )
     uploaded_file = st.sidebar.file_uploader("📤 Upload scanned form", type=["jpg", "jpeg", "png", "pdf"])
     if uploaded_file:
