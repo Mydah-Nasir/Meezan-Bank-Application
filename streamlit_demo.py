@@ -1,15 +1,10 @@
 import streamlit as st
 import base64
 from pathlib import Path
-import streamlit as st
 import cv2
 import time
-# import pytesseract
-# from pytesseract import Output
 from PIL import Image
 import openai
-import base64
-#import ollama
 import tempfile
 import json
 import io
@@ -19,50 +14,71 @@ from openai import OpenAI
 import re
 import numpy as np
 import pandas as pd
-import cv2
-import requests
-import numpy as np
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle, Frame, Paragraph
 from reportlab.lib.units import inch
-import os
 from reportlab.lib.styles import getSampleStyleSheet
-import pandas as pd
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 from reportlab.lib.styles import ParagraphStyle
-# from paddleocr import PaddleOCR
-import os
 import hashlib
-# import torch
+import requests
+
+# Try to import PDF libraries
+try:
+    import pypdfium2 as pdfium
+    PDF_SUPPORT = True
+except ImportError:
+    PDF_SUPPORT = False
+    st.warning("PyPDFium2 not available - PDF support limited")
 
 #----------Functions----------
-# --- Helper Functions ---
+def convert_pdf_to_images(pdf_file):
+    """Convert PDF file to list of PIL Images using pypdfium2"""
+    try:
+        # Save uploaded PDF to temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+            tmp_file.write(pdf_file.getvalue())
+            tmp_path = tmp_file.name
+        
+        # Convert PDF to images using pypdfium2
+        pdf = pdfium.PdfDocument(tmp_path)
+        images = []
+        
+        for page_number in range(len(pdf)):
+            page = pdf.get_page(page_number)
+            bitmap = page.render(scale=2.0)  # Higher scale for better quality
+            pil_image = bitmap.to_pil()
+            images.append(pil_image)
+        
+        # Clean up
+        pdf.close()
+        os.unlink(tmp_path)
+        
+        return images
+    except Exception as e:
+        st.error(f"Error converting PDF to images: {str(e)}")
+        return None
+
 def file_hash(file_obj):
     return hashlib.md5(file_obj.getbuffer()).hexdigest()
+
 def display_dict(data):
     for key, value in data.items():
         if isinstance(value, dict):
             st.subheader(key)
-            #print(" " * indent + f"{key}:")  # heading
-            display_dict(value)  # recursive call with indentation
+            display_dict(value)
         else:
             st.write(f"{key}: {value}")
-            #print(" " * indent + f"{key}: {value}")
-# ---- Parse Markdown into dict ----
+
 def parse_response(text):
     data = {}
-
-    # Match patterns like **Field:** value
     matches = re.findall(r"\*\*(.+?)\*\*:\s*([^\n]+)", text)
     for field, value in matches:
         data[field.strip()] = value.strip()
-
     return data
-
-
 
 def render_dict(d, prefix=""):
     """Recursively render dictionary fields as editable Streamlit inputs"""
@@ -73,253 +89,87 @@ def render_dict(d, prefix=""):
             st.subheader(key)
             updated[key] = render_dict(value, prefix=field_key + ".")
         else:
-            # Choose appropriate input type
-            if value in ["Single", "Married", "Yes", "No"]:
-                options = ["Single", "Married"] if key.lower() == "marital status" else ["Yes", "No"]
-                updated[key] = st.selectbox(key, options, index=options.index(value))
+            if value in ["Single", "Married", "Male", "Female", "Transgender", "Yes", "No", "Filer", "Non-Filer"]:
+                if key.lower() == "marital status":
+                    options = ["Single", "Married"]
+                elif key.lower() == "gender":
+                    options = ["Male", "Female", "Transgender"]
+                elif key.lower() == "zakat deduction":
+                    options = ["Yes", "No"]
+                elif key.lower() == "tax status":
+                    options = ["Filer", "Non-Filer"]
+                else:
+                    options = ["Yes", "No"]
+                default_index = options.index(value) if value in options else 0
+                updated[key] = st.selectbox(key, options, index=default_index)
+            elif key.lower() == "purpose":
+                options = ["NEW ACCOUNT OPENING", "EXISTING ACCOUNT REG NO. REGULARIZATION", "EXISTING ACCOUNT REG NO. UPGRADATION"]
+                default_index = options.index(value) if value in options else 0
+                updated[key] = st.selectbox(key, options, index=default_index)
+            elif key.lower() == "mailing address":
+                options = ["RESIDENTIAL ADDRESS", "OFFICE/BUSINESS ADDRESS"]
+                default_index = options.index(value) if value in options else 0
+                updated[key] = st.selectbox(key, options, index=default_index)
+            elif key.lower() == "statement delivery":
+                options = ["By Email", "By Post"]
+                default_index = options.index(value) if value in options else 0
+                updated[key] = st.selectbox(key, options, index=default_index)
+            elif key.lower() == "account type":
+                options = ["Single", "Joint", "Minor", "Sole Proprietorship"]
+                default_index = options.index(value) if value in options else 0
+                updated[key] = st.selectbox(key, options, index=default_index)
+            elif key.lower() == "resident status":
+                options = ["Resident", "Non-Resident"]
+                default_index = options.index(value) if value in options else 0
+                updated[key] = st.selectbox(key, options, index=default_index)
+            elif key.lower() == "type of institution":
+                options = ["Individual", "Corporate", "Institution"]
+                default_index = options.index(value) if value in options else 0
+                updated[key] = st.selectbox(key, options, index=default_index)
+            elif key.lower() == "dividend distribution option":
+                options = ["Reinvest Dividend", "Credit to Bank Account", "Pay by Cheque"]
+                default_index = options.index(value) if value in options else 0
+                updated[key] = st.selectbox(key, options, index=default_index)
+            elif key.lower() == "communication mode":
+                options = ["Email", "Postal Mail", "SMS"]
+                default_index = options.index(value) if value in options else 0
+                updated[key] = st.selectbox(key, options, index=default_index)
+            elif key.lower() == "account operating instructions":
+                options = ["Either or Survivor", "Jointly Operated", "Anyone or Survivor"]
+                default_index = options.index(value) if value in options else 0
+                updated[key] = st.selectbox(key, options, index=default_index)
+            elif key.lower() == "nature of business":
+                options = ["Retail", "Trading", "Services", "Manufacturing", "Self-employed professional", "Other"]
+                default_index = options.index(value) if value in options else 0
+                updated[key] = st.selectbox(key, options, index=default_index)
+            elif key.lower() == "business/employment details":
+                options = ["Federal Government Employee", "Provincial Government Employee", "Semi-Government Employee", "Private Service", "Allied Bank Employee", "Other"]
+                default_index = options.index(value) if value in options else 0
+                updated[key] = st.selectbox(key, options, index=default_index)
+            elif key.lower() == "education":
+                options = ["Up to Matric/O-Level", "Intermediate/A-Level", "Bachelors"]
+                default_index = options.index(value) if value in options else 0
+                updated[key] = st.selectbox(key, options, index=default_index)
+            elif key.lower() == "profession":
+                options = ["Student", "Housewife", "Agriculturist", "Other"]
+                default_index = options.index(value) if value in options else 0
+                updated[key] = st.selectbox(key, options, index=default_index)
+            elif key.lower() == "occupation":
+                options = ["Self-employed", "Salaried", "Other"]
+                default_index = options.index(value) if value in options else 0
+                updated[key] = st.selectbox(key, options, index=default_index)
             else:
                 updated[key] = st.text_input(key, value=str(value))
     return updated
 
-def find_heading_y(image_gray, heading_text):
-    ocr_data = pytesseract.image_to_data(image_gray, output_type=Output.DICT)
-    for i, word in enumerate(ocr_data['text']):
-        if heading_text.lower() in word.lower():
-            return ocr_data['top'][i]
-    return None
-
-def save_to_pdf(data_dict1, data_dict2, data_dict3):
-    PAGE_WIDTH, PAGE_HEIGHT = A4
-    pdf_file = "bank_form_data.pdf"
-    c = canvas.Canvas(pdf_file, pagesize=A4)
-    c.setFont("Helvetica-Bold", 14)
-    c.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 60, "Meezan Bank Account Opening Extracted Data")
-    c.setFont("Helvetica", 10)
-    c.drawString(40, PAGE_HEIGHT - 90, f"Day: {data_dict1.get('Day')} Month: {data_dict1.get('Month')} Year: {data_dict1.get('Year')}")
-    c.drawString(2 * PAGE_WIDTH / 3, PAGE_HEIGHT - 90, f"Type of Account: {data_dict1.get('Type of Account')}")
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, PAGE_HEIGHT - 110, f"PRINICPAL ACCOUNT HOLDER")
-    c.setFont("Helvetica", 10)
-    c.drawString(40, PAGE_HEIGHT - 130, f"Name MR./Mrs./Ms: {data_dict1.get('Name')}")
-    c.drawString(40, PAGE_HEIGHT - 150, f"Father / Husband's Name: {data_dict1.get('Father/Husband Name')}")
-    y = PAGE_HEIGHT - 150
-    c.drawString(PAGE_WIDTH / 2, y, f"Mother's Maiden Name: {data_dict1.get('Mother Maiden Name')}")
-    y-=20
-    c.drawString(40, y, f"CNIC/NICOP/Passport No.: {data_dict1.get('CNIC/NICOP/Passport No')}")
-    y-=20
-    c.drawString(40, y, f"Issuance Date: {data_dict1.get('Issuance Date')}")
-    c.drawString(PAGE_WIDTH / 2, y, f"Expiry Date: {data_dict1.get('Expiry Date')}")
-    y-=20
-    c.drawString(40, y, f"Date of Birth: {data_dict1.get('Date of Birth')}")
-    c.drawString(PAGE_WIDTH / 2, y, f"Marital Status: {data_dict1.get('Marital Status')}")
-    y-=20
-    c.drawString(40, y, f"Religion: {data_dict1.get('Religion')}")
-    c.drawString(PAGE_WIDTH / 2, y, f"Place of Birth: {data_dict1.get('Place of Birth')}")
-    y-=20
-    c.drawString(40, y, f"Nationality: {data_dict1.get('Nationality')}")
-    c.drawString(PAGE_WIDTH / 2, y, f"Dual Nationality: {data_dict1.get('Dual Nationality')}")
-    y-=20
-    c.drawString(40, y, f"Mailing Address:")
-    y-=20
-    c.drawString(60, y, f"Street: {data_dict1.get('Mailing Address: Street')}")
-    y-=20
-    c.drawString(60, y, f"City: {data_dict1.get('Mailing Address: City')}")
-    c.drawString(PAGE_WIDTH / 2, y, f"Country: {data_dict1.get('Mailing Address: Country')}")
-    y-=20
-    c.drawString(40, y, f"Current Address as per CNIC:")
-    y-=20
-    c.drawString(60, y, f"Street: {data_dict1.get('Current Address: Street')}")
-    y-=20
-    c.drawString(60, y, f"City: {data_dict1.get('Current Address: City')}")
-    c.drawString(PAGE_WIDTH / 2, y, f"Country: {data_dict1.get('Current Address: Country')}")
-    y-=20
-    c.drawString(40,y,f"Residential Status {data_dict2.get('Residential Status')}")
-    y-=20
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, f"CONTACT DETAILS")
-    c.setFont("Helvetica", 10)
-    y-=20
-    c.drawString(40, y, f"Email: {data_dict2.get('Email')}")
-    c.drawString(PAGE_WIDTH / 2, y, f"Mobile Network: {data_dict2.get('Mobile Network')}")
-    y-=20
-    c.drawString(40, y, f"Mobile: {data_dict2.get('Mobile')}")
-    c.drawString(PAGE_WIDTH / 2, y, f"Tel Res/Office: {data_dict2.get('Tel/Res Office')}")
-    y-=20
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(40, y, f"IN CASE OF MINOR ACCOUNT:")
-    y-=20
-    c.setFont("Helvetica", 10)
-    c.drawString(40, y, f"Name of Guardian: {data_dict2.get('In Case of Minor Account: Name of Guardian')}")
-    c.drawString(PAGE_WIDTH / 2, y, f"Realtionship with Principal: {data_dict2.get('In Case of Minor Account: Relation with Principal')}")
-    y-=20
-    c.drawString(40, y, f"Guardian CNIC: {data_dict2.get('In Case of Minor Account: Guardian CNIC')}")
-    c.drawString(PAGE_WIDTH / 2, y, f"CNIC Expiry Date : {data_dict2.get('In Case of Minor Account: CNIC Expiry Date')}")
-    y-=20
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(40, y, f"BANK ACCOUNT DETAIL OF PRINICPAL ACCOUNT HOLDER FOR REDEMPTION AND DIVIDEND PAYMENTS")
-    c.setFont("Helvetica", 10)
-    y-=20
-    c.drawString(40, y, f"Bank Account No.(IBAN preferred): {data_dict2.get('Bank Account Detail: Bank Account No.')}")
-    y-=20
-    c.drawString(40, y, f"Bank Name: {data_dict2.get('Bank Account Detail: Bank')}")
-    c.drawString(PAGE_WIDTH / 3, y, f" Branch: {data_dict2.get('Bank Account Detai: Branch')}")
-    c.drawString(2 * PAGE_WIDTH / 3, y, f" City: {data_dict2.get('Bank Account Detail: City')}")
-    y-=20
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, f"JOINT ACCOUNT HOLDERS")
-    c.setFont("Helvetica-Bold", 10)
-    y-=20
-    c.drawString(40, y, f"Joint Holder 1: ")
-    y-=20
-    c.setFont("Helvetica", 10)
-    c.drawString(40, y, f"Realtion with Principal: {data_dict2.get('Joint Account Holders: Joint Holder 1: Relation with Principal')}")
-    c.drawString(PAGE_WIDTH / 2, y, f"Customer ID (if any) {data_dict2.get('Joint Account Holders: Joint Holder 1: Customer ID')}")
-    y-=20
-    c.drawString(40, y, f"Name: {data_dict2.get('Joint Account Holders: Joint Holder 1: Name')}")
-    y-=20
-    c.drawString(40, y, f"CNIC/NICOP/Passport No.: {data_dict2.get('Joint Account Holders: Joint Holder 1: CNIC/NICOP/Passport')}")
-    y-=20
-    c.drawString(40, y, f"Issuance Date: {data_dict2.get('Joint Account Holders: Joint Holder 1: Issuance Date')}")
-    c.drawString(PAGE_WIDTH / 2, y, f"Expiry Date: {data_dict2.get('Joint Account Holders: Joint Holder 1: Expiry Date')}")
-    y-=20
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(40, y, f"Joint Holder 2:")
-    y-=20
-    c.setFont("Helvetica", 10)
-    c.drawString(40, y, f"Realtion with Principal: {data_dict2.get('Joint Account Holders: Joint Holder 2: Relation with Principal')}")
-    c.drawString(PAGE_WIDTH / 2, y, f"Customer ID (if any): {data_dict2.get('Joint Account Holders: Joint Holder 2: Customer ID')}")
-    y-=20
-    c.drawString(40, y, f"Name: {data_dict2.get('Joint Account Holders: Joint Holder 2: Name')}")
-    y-=20
-    c.drawString(40, y, f"CNIC/NICOP/Passport No.: {data_dict2.get('Joint Account Holders: Joint Holder 2: CNIC/NICOP/Passport')}")
-    y-=20
-    c.drawString(40, y, f"Issuance Date: {data_dict2.get('Joint Account Holders: Joint Holder 2: Issuance Date')}")
-    c.drawString(PAGE_WIDTH / 2, y, f"Expiry Date: {data_dict2.get('Joint Account Holders: Joint Holder 2: Expiry Date')}")
-    c.showPage()
-    y = PAGE_HEIGHT - 60
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, f"SPECIAL INSTRUCTIONS")
-    y-=20
-    c.setFont("Helvetica", 10)
-    c.drawString(40, y, f"Account Operating Instructions: {data_dict3.get('Account Operating Instructions')}")
-    y-=20
-    c.drawString(40, y, f"Dividend Mandate: {data_dict3.get('Dividend Mandate')}")
-    c.drawString(PAGE_WIDTH / 2, y, f"Stock Dividend: {data_dict3.get('Stock Dividend')}")
-    y-=20
-    c.drawString(40, y, f"Communication Mode: {data_dict3.get('Communication Mode')}")
-    y-=20
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(40, y, f"DETAIL ABOUT MEEZAN TAHAFFUZ PENSION FUND (MTPF Account)")
-    y-=20
-    c.setFont("Helvetica", 10)
-    c.drawString(40, y, f"Expected Retirement Date: {data_dict3.get('Expected Retirement Date')}")
-    y-=20
-    c.drawString(40, y, f"Allocation Scheme: {data_dict3.get('Allocation Scheme')}")
-    c.save()
-    return pdf_file
-import subprocess
-def restart_ollama():
-    try:
-        subprocess.run(["sudo", "systemctl", "stop", "ollama"], check=True)
-        subprocess.run(["sudo", "systemctl", "start", "ollama"], check=True)
-        #st.success("✅ Ollama service restarted successfully.")
-        print("Ollama running successfully")
-    except subprocess.CalledProcessError as e:
-        st.error(f"❌ Failed to restart Ollama: {e}")
-
-
-MODEL_PATH = "./llama_vision_model"  # local saved model folder
-
-@st.cache_resource
-def load_local_model():
-    """Load and cache the locally saved Llama Vision model"""
-    processor = AutoProcessor.from_pretrained(MODEL_PATH)
-    model = AutoModelForVision2Seq.from_pretrained(
-        MODEL_PATH,
-        torch_dtype=torch.float32,
-        device_map="cpu"   # or "auto" if you have GPU
-    )
-    return processor, model
-
-
-def call_local_model_with_image(image_file, prompt):
-    """Run inference using the locally saved model"""
-    try:
-        processor, model = load_local_model()
-
-        # Open image
-        image = Image.open(image_file).convert("RGB")
-
-        # Preprocess input
-        inputs = processor(images=image, text=prompt, return_tensors="pt")
-
-        # Move tensors to model device
-        device = next(model.parameters()).device
-        inputs = {k: v.to(device) for k, v in inputs.items()}
-
-        # Generate output
-        with torch.no_grad():
-            outputs = model.generate(**inputs, max_new_tokens=200)
-
-        # Decode output
-        result = processor.decode(outputs[0], skip_special_tokens=True)
-        print(result)
-        return result
-
-    except Exception as e:
-        st.error(f"Error running local model: {str(e)}")
-        return None
-def ensure_ollama_running():
-    """Start Ollama server if it's not already running."""
-    try:
-        # Test connection to Ollama server
-        requests.get("http://localhost:11434/ping", timeout=2)
-    except:
-        # Start Ollama server in background
-        subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(5)
-
-
-
-
-# def call_ollama_api_with_image(image_file, prompt, model="qwen2.5vl:7b"):
-#     """Call Ollama client with image and forcefully reset connection after each use."""
-#     #ensure_ollama_running()
-#     try:
-#         # Convert image to bytes
-#         image = Image.open(image_file)
-#         buffered = io.BytesIO()
-#         image.save(buffered, format="JPEG")
-#         image_bytes = buffered.getvalue()
-
-#         # Initialize new client (default connects to localhost:11434)
-#         client = ollama.Client()
-
-#         # Call Ollama chat
-#         response = client.chat(
-#             model=model,
-#             messages=[{
-#                 "role": "user",
-#                 "content": prompt,
-#                 "images": [image_bytes],
-#             }],
-#             stream=False
-#         )
-#         return response.get("message", {}).get("content", "")
-
-#     except Exception as e:
-#         st.error(f"Error using Ollama chat API: {str(e)}")
-#         return None
 OPENAI_API_KEY = st.secrets["API_KEY"]
 api_key = OPENAI_API_KEY
-def call_openai_api_with_image(image_file, prompt=None, model="gpt-4o"):
-    """Call OpenAI GPT-4o API with Streamlit-uploaded image and text prompt."""
 
+def call_openai_api_with_image(image_file, prompt=None, model="gpt-4o"):
+    """Call OpenAI GPT-4o API with Streamlit-uploaded image/PDF and text prompt."""
     try:
-        # Initialize OpenAI client
         client = OpenAI(api_key=api_key)
 
-        # Define a default extraction prompt
         default_prompt = (
             "You are an expert in OCR and document analysis. "
             "Carefully review the uploaded image and extract all visible information from it. "
@@ -330,17 +180,34 @@ def call_openai_api_with_image(image_file, prompt=None, model="gpt-4o"):
             "Avoid adding extra commentary or assumptions — only include what is visible in the document."
         )
 
-
-        # Use default prompt if user did not provide one
         effective_prompt = prompt.strip() if prompt else default_prompt
 
-        # Open and re-encode uploaded image file to base64
-        image = Image.open(image_file)
+        # Check if the file is a PDF
+        if hasattr(image_file, 'type') and image_file.type == "application/pdf":
+            if not PDF_SUPPORT:
+                st.error("PDF processing is not available. Please install pypdfium2.")
+                return None
+                
+            # Convert PDF to images and use the first page
+            pdf_images = convert_pdf_to_images(image_file)
+            if pdf_images and len(pdf_images) > 0:
+                image = pdf_images[0]  # Use first page
+                st.info(f"📄 PDF detected. Processing first page of {len(pdf_images)} pages.")
+            else:
+                st.error("Failed to convert PDF to images.")
+                return None
+        else:
+            # It's an image file
+            image = Image.open(image_file)
+        
+        # Convert to RGB if necessary and prepare for API
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+            
         buffered = io.BytesIO()
-        image.convert("RGB").save(buffered, format="JPEG")  # ensure JPEG format
+        image.save(buffered, format="JPEG", quality=95)
         image_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-        # Compose message content
         messages = [
             {
                 "role": "user",
@@ -356,13 +223,11 @@ def call_openai_api_with_image(image_file, prompt=None, model="gpt-4o"):
             }
         ]
 
-        # Call OpenAI GPT-4o chat completion endpoint
         response = client.chat.completions.create(
             model=model,
             messages=messages,
         )
 
-        # Extract text reply
         reply = response.choices[0].message.content
         return reply
 
@@ -370,169 +235,23 @@ def call_openai_api_with_image(image_file, prompt=None, model="gpt-4o"):
         st.error(f"Error using OpenAI GPT-4o API: {str(e)}")
         return None
 
-        
-
-def segment_image(image_pil):
-    image_cv = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2GRAY)
-    width, height = image_pil.size
-
-    y_contact = find_heading_y(image_cv, "CONTACT DETAILS") or int(height * 0.4)
-    y_special = find_heading_y(image_cv, "SPECIAL INSTRUCTIONS") or int(height * 0.65)
-
-    boxes = [
-        (0, 0, width, y_contact),
-        (0, y_contact, width, y_special),
-        (0, y_special, width, height)
-    ]
-
-    segment_paths = []
-    for i, box in enumerate(boxes, 1):
-        segment = image_pil.crop(box)
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-        segment.save(temp_file.name)
-        segment_paths.append(temp_file.name)
-
-    return segment_paths
-
-import re
 def extract_value(text, field):
     if not isinstance(text, str):
         return None
     patterns = [
         rf"\*\*{re.escape(field)}:\*\* (.+?)(\n|$)",
-        rf"{re.escape(field)}: (.+?)(\n|$)"
+        rf"{re.escape(field)}: (.+?)(\n|$)",
+        rf"{re.escape(field)}\s*-\s*(.+?)(\n|$)"
     ]
     for pattern in patterns:
         match = re.search(pattern, text)
         if match:
             val = match.group(1).strip()
-            if val.lower() in ["[not provided]", "not applicable", "[not applicable]"]:
+            if val.lower() in ["[not provided]", "not applicable", "[not applicable]", "blank", "(blank)"]:
                 return None
             return val
     return None
-def extract_address_block(response_text: str, addr_type: str) -> dict:
-    """
-    Extracts address components (Street, City, Country) for Mailing/Current Address.
-    """
-    address = {}
-    # Find the block for this address type
-    block_pattern = rf"(?:\*|\+)\s*{re.escape(addr_type)}:\s*(.*?)(?=\n\*|\Z)"
-    block_match = re.search(block_pattern, response_text, re.DOTALL | re.IGNORECASE)
-    if block_match:
-        block_text = block_match.group(1)
 
-        # Now extract individual components from inside the block
-        for field in ["Street", "City", "Country"]:
-            pattern = rf"(?:\*|\+)\s*{field}:\s*(.*)"
-            match = re.search(pattern, block_text, re.IGNORECASE)
-            if match:
-                address[field] = match.group(1).strip()
-    return address
-def parse_account_opening_response(response_text: str) -> dict:
-    """
-    Parses structured account opening details from Ollama response text.
-
-    Args:
-        response_text (str): The response text from Ollama.
-
-    Returns:
-        dict: Extracted data in key-value form.
-    """
-    data = {}
-
-    # 3. General fields
-    fields = [
-        "Day","Month","Year","Type of Account","Name", "Father/Husband Name", "Mother Maiden Name", "CNIC/NICOP/Passport No",
-        "Issuance Date", "Expiry Date", "Date of Birth", "Marital Status",
-        "Religion", "Place of Birth", "Nationality", "Dual Nationality",
-    ]
-    for field in fields:
-        value = extract_value(response_text, field)
-        if value:
-            data[field] = value
-
-    # 4. Mailing and Current Address
-    for addr_type in ["Mailing Address", "Current Address"]:
-        address = extract_address_block(response_text, addr_type)
-        if address:
-            data[addr_type] = address   
-
-    return data
-
-
-def parse_account_info(response):
-    parsed = {}
-
-    parsed = {
-        "Residential Status": extract_value(response, "Residential Status"),
-        "Email": extract_value(response, "Email"),
-        "Mobile Network": extract_value(response, "Mobile Network"),
-        "Tel/Res Office": extract_value(response, "Tel/Res Office"),
-        "Mobile": extract_value(response, "Mobile")
-    }
-
-    parsed["In Case of Minor Account"] = {
-        "Name of Guardian": extract_value(response, "Name of Guardian"),
-        "Relation with Principal": extract_value(response, "Relation with Principal"),
-        "Guardian CNIC": extract_value(response, "Guardian CNIC"),
-        "CNIC Expiry Date": extract_value(response, "CNIC Expiry Date")
-    }
-
-    parsed["Bank Account Detail"] = {
-        "Bank Account No.": extract_value(response, "Bank Account No."),
-        "Bank": extract_value(response, "Bank"),
-        "Branch": extract_value(response, "Branch"),
-        "City": extract_value(response, "City")
-    }
-
-    # Extract Joint Account Holder blocks
-    joint_holders = {}
-    matches = re.split(r"\*{0,2}Joint Holder \d:?\*{0,2}", response)
-    if len(matches) > 1:
-        # The first item is text before Joint Holder 1, skip it
-        holder_texts = matches[1:]
-        for idx, block in enumerate(holder_texts, 1):
-            joint_holders[f"Joint Holder {idx}"] = {
-                "Name": extract_value(block, "Name"),
-                "Relation with Principal": extract_value(block, "Relation with Principal"),
-                "Customer ID": extract_value(block, "Customer ID"),
-                "CNIC/NICOP/Passport": extract_value(block, "CNIC/NICOP/Passport"),
-                "Issuance Date": extract_value(block, "Issuance Date"),
-                "Expiry Date": extract_value(block, "Expiry Date")
-            }
-    parsed["Joint Account Holders"] = joint_holders
-
-    return parsed
-def parse_special_instructions(response):
-    parsed = {
-            "Account Operating Instructions": extract_value(response, "Account Operating Instructions"),
-            "Dividend Mandate": extract_value(response, "Dividend Mandate"),
-            "Communication Mode": extract_value(response, "Communication Mode"),
-            "Stock Dividend": extract_value(response, "Stock Dividend"),
-            "Expected Retirement Date": extract_value(response, "Expected Retirement Date"),
-            "Allocation Scheme": []
-    }
-
-    # Handle multiple Allocation Scheme options
-    allocation_section = re.search(r"(?i)Alloca?tion Scheme[:\n]*((?:\*|\-).+?)(\n\n|\Z)", response, re.DOTALL)
-    if allocation_section:
-        allocations = re.findall(r"[\*\-]\s*(.+)", allocation_section.group(1))
-        parsed["Allocation Scheme"] = [a.strip() for a in allocations]
-
-    return parsed
-
-
-def encode_image_base64(image_path):
-    with open(image_path, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
-
-
-def display_flat_dict(data, prefix=""):
-    if isinstance(data, dict):
-        for key, value in data.items():
-            display_flat_dict(value, f"{prefix}{key} > " if prefix else f"{key}: ")
-    else:
-        st.markdown(f"**{prefix.strip(' >')}:** {data}")
 def flatten_dict(d, parent_key='', sep=': '):
     """Flatten nested JSON"""
     items = []
@@ -546,17 +265,1673 @@ def flatten_dict(d, parent_key='', sep=': '):
             items.append((new_key, v))
     return dict(items)
 
+# ---------- MCB Redemption Forms Specific Functions ----------
+def parse_mcb_redemption_c1(response_text: str) -> dict:
+    """Parse MCB Redemption Request Form For Plans And Funds - C-1"""
+    data = {}
+    
+    # Header Information
+    header_fields = ["Date", "Investor Registration Number", "CNIC/NICOP/Passport No.", "Title of Account"]
+    for field in header_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Section 1: Principal Applicant's Details
+    principal_fields = ["Name"]
+    for field in principal_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Section 2: Redemption Details
+    redemption_fields = [
+        "Name of the Fund / Investment Plan", "Type of Units", "Class of Units",
+        "No. of Units", "Amount", "In Words", "In Figures (Rs)", "Certificates Issued"
+    ]
+    
+    for field in redemption_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # CDS Account Details
+    cds_fields = ["Client/House/Investor Account No.", "Participant ID/IAS ID"]
+    for field in cds_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Investor Type
+    investor_type_fields = ["Individual Investor", "Institutional Investor"]
+    for field in investor_type_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data["Investor Type"] = field
+    
+    return data
+
+import re
+
+tick_symbols = r"[✓✔☑■●▣◆■○]"
+
+
+def checkbox_selected(label: str, text: str) -> bool:
+    """
+    Detect checkbox selections even with messy OCR.
+    Matches:
+        ✓ LABEL
+        LABEL ✓
+        [✓] LABEL
+        ■ LABEL
+        ● LABEL
+    """
+    patterns = [
+        rf"{label}\s*[:\-]?\s*\(?\s*{tick_symbols}\s*\)?",
+        rf"{tick_symbols}\s*\(?\s*{label}\s*\)?",
+        rf"\[\s*{tick_symbols}\s*\]\s*{label}",
+        rf"{label}\s*\[\s*{tick_symbols}\s*\]",
+    ]
+    return any(re.search(p, text, re.IGNORECASE) for p in patterns)
+
+
+def parse_mcb_early_redemption(response_text: str) -> dict:
+    """Parse MCB Early Redemption Request Form"""
+    data = {}
+
+    # ============================
+    # 1) FUND SELECTION - MORE AGGRESSIVE DETECTION
+    # ============================
+    
+    # Convert to uppercase for easier matching
+    text_upper = response_text.upper()
+    
+    # Look for explicit mentions with checkmarks
+    if "PAKISTAN PENSION FUND" in text_upper and any(marker in text_upper for marker in ["✓", "✔", "☑", "[✓]", "[X]", "SELECTED", "CHECKED"]):
+        data["Fund Type"] = "PAKISTAN PENSION FUND"
+    elif "ALHAMRA ISLAMIC PENSION FUND" in text_upper and any(marker in text_upper for marker in ["✓", "✔", "☑", "[✓]", "[X]", "SELECTED", "CHECKED"]):
+        data["Fund Type"] = "ALHAMRA ISLAMIC PENSION FUND"
+    else:
+        # Fallback: check which fund is mentioned more prominently
+        pakistan_count = text_upper.count("PAKISTAN PENSION FUND")
+        alhamra_count = text_upper.count("ALHAMRA ISLAMIC PENSION FUND")
+        
+        if pakistan_count > alhamra_count:
+            data["Fund Type"] = "PAKISTAN PENSION FUND (mentioned)"
+        elif alhamra_count > pakistan_count:
+            data["Fund Type"] = "ALHAMRA ISLAMIC PENSION FUND (mentioned)"
+        else:
+            data["Fund Type"] = "Not detected"
+
+    # ============================
+    # 2) HEADER FIELDS
+    # ============================
+    header_fields = ["Date", "Registration Number", "NTN No.", "Participant's Name"]
+    for field in header_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+
+    # ============================
+    # 3) PARTICIPANT DETAILS
+    # ============================
+    participant_fields = ["Participant's Name", "Distinctive Account Number"]
+    for field in participant_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+
+    # ============================
+    # 4) UNIT TYPE CHECKBOXES
+    # ============================
+    text_upper = response_text.upper()
+    
+    if "PROVIDENT FUND" in text_upper and any(marker in text_upper for marker in ["✓", "✔", "☑", "[✓]", "[X]", "SELECTED", "CHECKED"]):
+        data["Unit Type"] = "Provident Fund"
+    elif "NON PROVIDENT FUND" in text_upper and any(marker in text_upper for marker in ["✓", "✔", "☑", "[✓]", "[X]", "SELECTED", "CHECKED"]):
+        data["Unit Type"] = "Non Provident Fund"
+    else:
+        fallback = extract_value(response_text, "Unit Type")
+        data["Unit Type"] = fallback if fallback else "Not detected"
+
+    # ============================
+    # 5) REDEMPTION AMOUNT FIELDS
+    # ============================
+    redemption_fields = [
+        "Amount to be redeemed (Rupees)",
+        "In Words",
+        "In Figures"
+    ]
+
+    for field in redemption_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+
+    return data
+
+
+def save_mcb_early_redemption_to_pdf(form_data):
+    """Save MCB Early Redemption form data to PDF"""
+    PAGE_WIDTH, PAGE_HEIGHT = A4
+    pdf_file = "mcb_early_redemption_form_data.pdf"
+    c = canvas.Canvas(pdf_file, pagesize=A4)
+    
+    # Header
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 50, "MCB Early Redemption Request Form")
+    
+    # FUND SELECTION (TOP OF FORM)
+    y = PAGE_HEIGHT - 80
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "FUND SELECTION")
+    
+    y -= 20
+    c.setFont("Helvetica", 10)
+    if "Fund Type" in form_data:
+        c.drawString(40, y, f"Selected Fund: {form_data['Fund Type']}")
+        y -= 15
+    
+    # Header Information
+    y -= 10
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "HEADER INFORMATION")
+    
+    y -= 20
+    c.setFont("Helvetica", 10)
+    header_fields = ["Date", "Registration Number", "NTN No.", "Participant's Name"]
+    for field in header_fields:
+        if field in form_data:
+            c.drawString(40, y, f"{field}: {form_data[field]}")
+            y -= 15
+    
+    # Participant Details
+    y -= 10
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "PARTICIPANT DETAILS")
+    
+    y -= 20
+    c.setFont("Helvetica", 10)
+    if "Distinctive Account Number" in form_data:
+        c.drawString(40, y, f"Distinctive Account Number: {form_data['Distinctive Account Number']}")
+        y -= 15
+    
+    # Redemption Information - UNIT TYPE FIRST
+    y -= 10
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "EARLY REDEMPTION INFORMATION")
+    
+    y -= 20
+    c.setFont("Helvetica", 10)
+    
+    # Unit Type (checkboxes come first in Section 2)
+    if "Unit Type" in form_data:
+        c.drawString(40, y, f"Unit Type: {form_data['Unit Type']}")
+        y -= 15
+    
+    # Amount fields
+    redemption_fields = ["Amount to be redeemed (Rupees)", "In Words", "In Figures"]
+    for field in redemption_fields:
+        if field in form_data:
+            c.drawString(40, y, f"{field}: {form_data[field]}")
+            y -= 15
+    
+    # Income Payment Plan
+    if "Income Payment Plan" in form_data:
+        c.drawString(40, y, f"Income Payment Plan: {form_data['Income Payment Plan']}")
+        y -= 15
+    
+    # Tax Details
+    y -= 10
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "TAX DETAILS")
+    
+    y -= 20
+    c.setFont("Helvetica", 10)
+    tax_fields = [
+        "Total Taxable Income for Three Preceding Tax Years", 
+        "Total Tax Paid or Payable for Three Preceding Tax Years",
+        "Income Tax Returns"
+    ]
+    for field in tax_fields:
+        if field in form_data:
+            c.drawString(40, y, f"{field}: {form_data[field]}")
+            y -= 15
+    
+    c.save()
+    return pdf_file
+
+def process_mcb_early_redemption(uploaded_file, col2):
+    """Process MCB Early Redemption Request Form"""
+    mcb_early_redemption_prompt = """
+    Extract ALL information from this MCB Early Redemption Request Form. Focus on these specific sections:
+
+    FUND SELECTION (TOP OF FORM):
+    - PAKISTAN PENSION FUND [Check if selected]
+    - ALHAMRA ISLAMIC PENSION FUND [Check if selected]
+
+    HEADER INFORMATION:
+    - Date
+    - Registration Number
+    - NTN No.
+    - Participant's Name
+
+    SECTION 1: PARTICIPANT'S DETAILS:
+    - Participant's Name
+    - Distinctive Account Number
+
+    SECTION 2: EARLY REDEMPTION INFORMATION:
+    - Unit Type (Provident Fund / Non Provident Fund)
+    - Amount to be redeemed (Rupees) - in Figures and in Words
+    - Income Payment Plan [Check if selected]
+
+    SECTION 3: DETAILS OF TAX (Mandatory for Non Provident Fund Unit Type):
+    - Total Taxable Income for Three Preceding Tax Years
+    - Total Tax Paid or Payable for Three Preceding Tax Years
+    - Income Tax Returns (Attached/Not Attached)
+
+    Extract all text exactly as it appears on the form. Include any checked boxes, selected options, or filled amounts.
+    """
+    
+    response_key = "mcb_early_redemption_response"
+    if response_key not in st.session_state:
+        with st.spinner("Extracting data from MCB Early Redemption Form..."):
+            response = call_openai_api_with_image(uploaded_file, mcb_early_redemption_prompt)
+            st.session_state[response_key] = response
+    
+    if response_key in st.session_state:
+        parsed_data = parse_mcb_early_redemption(st.session_state[response_key])
+        flat_data = flatten_dict(parsed_data)
+        
+        with col2:
+            st.markdown("MCB Early Redemption Form Data")
+            with st.container(height=700):
+                with st.form("mcb_early_redemption_form"):
+                    edited_form = {}
+                    cols = st.columns(2)
+                    
+                    for idx, (field, value) in enumerate(flat_data.items()):
+                        col = cols[idx % 2]
+                        with col:
+                            if field in ["Fund Type", "Unit Type", "Income Payment Plan"]:
+                                if field == "Fund Type":
+                                    options = ["PAKISTAN PENSION FUND", "ALHAMRA ISLAMIC PENSION FUND", "Not Selected"]
+                                elif field == "Unit Type":
+                                    options = ["Provident Fund", "Non Provident Fund", "Income Payment Plan", "Not Selected"]
+                                elif field == "Income Payment Plan":
+                                    options = ["Selected", "Not Selected"]
+                                
+                                default_index = options.index(value) if value in options else 0
+                                edited_form[field] = st.selectbox(field, options, index=default_index)
+                            elif field == "Income Tax Returns":
+                                options = ["Attached", "Not Attached"]
+                                default_index = options.index(value) if value in options else 0
+                                edited_form[field] = st.selectbox(field, options, index=default_index)
+                            else:
+                                edited_form[field] = st.text_input(field, value=value if value else "")
+                    
+                    submitted = st.form_submit_button("Save Form")
+        
+        st.subheader('Extracted Data from MCB Early Redemption Form')
+        st.write(st.session_state[response_key])
+        
+        st.subheader('Structured Data')
+        display_dict(parsed_data)
+        
+        if submitted:
+            pdf_path = save_mcb_early_redemption_to_pdf(edited_form)
+            with open(pdf_path, "rb") as f:
+                st.sidebar.download_button(
+                    "Download PDF", 
+                    f, 
+                    file_name="mcb_early_redemption_form_data.pdf", 
+                    mime="application/pdf", 
+                    use_container_width=True
+                )
+                st.success("MCB Early Redemption Form data saved successfully!")
+
+def save_mcb_redemption_c1_to_pdf(form_data):
+    """Save MCB Redemption C-1 form data to PDF"""
+    PAGE_WIDTH, PAGE_HEIGHT = A4
+    pdf_file = "mcb_redemption_c1_form_data.pdf"
+    c = canvas.Canvas(pdf_file, pagesize=A4)
+    
+    # Header
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 50, "MCB Redemption Request Form C-1")
+    
+    # Header Information
+    y = PAGE_HEIGHT - 80
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "HEADER INFORMATION")
+    
+    y -= 20
+    c.setFont("Helvetica", 10)
+    header_fields = ["Date", "Investor Registration Number", "CNIC/NICOP/Passport No.", "Title of Account"]
+    for field in header_fields:
+        if field in form_data:
+            c.drawString(40, y, f"{field}: {form_data[field]}")
+            y -= 15
+    
+    # Principal Applicant Details
+    y -= 10
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "PRINCIPAL APPLICANT DETAILS")
+    
+    y -= 20
+    c.setFont("Helvetica", 10)
+    if "Name" in form_data:
+        c.drawString(40, y, f"Name: {form_data['Name']}")
+        y -= 15
+    
+    # Redemption Details
+    y -= 10
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "REDEMPTION DETAILS")
+    
+    y -= 20
+    c.setFont("Helvetica", 10)
+    redemption_fields = ["Name of the Fund / Investment Plan", "Type of Units", "Class of Units", 
+                        "No. of Units", "Amount", "In Words", "In Figures (Rs)"]
+    for field in redemption_fields:
+        if field in form_data:
+            c.drawString(40, y, f"{field}: {form_data[field]}")
+            y -= 15
+    
+    c.save()
+    return pdf_file
+
+def save_mcb_early_redemption_to_pdf(form_data):
+    """Save MCB Early Redemption form data to PDF"""
+    PAGE_WIDTH, PAGE_HEIGHT = A4
+    pdf_file = "mcb_early_redemption_form_data.pdf"
+    c = canvas.Canvas(pdf_file, pagesize=A4)
+    
+    # Header
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 50, "MCB Early Redemption Request Form")
+    
+    # Fund Selection
+    y = PAGE_HEIGHT - 80
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "FUND SELECTION")
+    
+    y -= 20
+    c.setFont("Helvetica", 10)
+    if "Fund Type" in form_data:
+        c.drawString(40, y, f"Fund Type: {form_data['Fund Type']}")
+        y -= 15
+    
+    # Header Information
+    y -= 10
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "HEADER INFORMATION")
+    
+    y -= 20
+    c.setFont("Helvetica", 10)
+    header_fields = ["Date", "Registration Number", "NTN No.", "Participant's Name"]
+    for field in header_fields:
+        if field in form_data:
+            c.drawString(40, y, f"{field}: {form_data[field]}")
+            y -= 15
+    
+    # Participant Details
+    y -= 10
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "PARTICIPANT DETAILS")
+    
+    y -= 20
+    c.setFont("Helvetica", 10)
+    participant_fields = ["Participant's Name", "Distinctive Account Number"]
+    for field in participant_fields:
+        if field in form_data:
+            c.drawString(40, y, f"{field}: {form_data[field]}")
+            y -= 15
+    
+    # Early Redemption Information
+    y -= 10
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "EARLY REDEMPTION INFORMATION")
+    
+    y -= 20
+    c.setFont("Helvetica", 10)
+    redemption_fields = ["Unit Type", "Amount to be redeemed (Rupees)", "In Words", "In Figures", "Income Payment Plan"]
+    for field in redemption_fields:
+        if field in form_data:
+            c.drawString(40, y, f"{field}: {form_data[field]}")
+            y -= 15
+    
+    # Tax Details
+    y -= 10
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "TAX DETAILS")
+    
+    y -= 20
+    c.setFont("Helvetica", 10)
+    tax_fields = [
+        "Total Taxable Income for Three Preceding Tax Years", 
+        "Total Tax Paid or Payable for Three Preceding Tax Years",
+        "Income Tax Returns"
+    ]
+    for field in tax_fields:
+        if field in form_data:
+            c.drawString(40, y, f"{field}: {form_data[field]}")
+            y -= 15
+    
+    c.save()
+    return pdf_file
+
+# ---------- Process MCB Redemption Forms ----------
+def process_mcb_redemption_c1(uploaded_file, col2):
+    """Process MCB Redemption Request Form C-1"""
+    mcb_redemption_prompt = """
+    Extract ALL information from this MCB Redemption Request Form C-1. Focus on these specific sections:
+
+    HEADER INFORMATION:
+    - Date
+    - Investor Registration Number
+    - CNIC/NICOP/Passport No.
+    - Title of Account
+
+    SECTION 1: PRINCIPAL APPLICANT'S DETAILS:
+    - Name (as per CNIC/NICOP/Passport)
+
+    SECTION 2: REDEMPTION DETAILS:
+    - Name of the Fund / Investment Plan
+    - Type of Units
+    - Class of Units
+    - No. of Units
+    - Amount (in Figures and in Words)
+    - Certificates Issued (Yes/No, if yes Certificate No.)
+
+    CDS ACCOUNT DETAILS:
+    - Client/House/Investor Account No.
+    - Participant ID/IAS ID
+
+    INVESTOR TYPE:
+    - Individual Investor
+    - Institutional Investor
+
+    Extract all text exactly as it appears on the form. Include any checked boxes or selected options.
+    """
+    
+    response_key = "mcb_redemption_c1_response"
+    if response_key not in st.session_state:
+        with st.spinner("Extracting data from MCB Redemption Form C-1..."):
+            response = call_openai_api_with_image(uploaded_file, mcb_redemption_prompt)
+            st.session_state[response_key] = response
+    
+    if response_key in st.session_state:
+        parsed_data = parse_mcb_redemption_c1(st.session_state[response_key])
+        flat_data = flatten_dict(parsed_data)
+        
+        with col2:
+            st.markdown("### 📝 MCB Redemption Form C-1 Data")
+            with st.container(height=700):
+                with st.form("mcb_redemption_c1_form"):
+                    edited_form = {}
+                    cols = st.columns(2)
+                    
+                    for idx, (field, value) in enumerate(flat_data.items()):
+                        col = cols[idx % 2]
+                        with col:
+                            if field in ["Certificates Issued", "Individual Investor", "Institutional Investor"]:
+                                options = ["Yes", "No"] if field == "Certificates Issued" else ["Selected", "Not Selected"]
+                                default_index = options.index(value) if value in options else 0
+                                edited_form[field] = st.selectbox(field, options, index=default_index)
+                            else:
+                                edited_form[field] = st.text_input(field, value=value if value else "")
+                    
+                    submitted = st.form_submit_button("Save Form")
+        
+        st.subheader('Extracted Data from MCB Redemption Form C-1')
+        st.write(st.session_state[response_key])
+        
+        st.subheader('Structured Data')
+        display_dict(parsed_data)
+        
+        if submitted:
+            pdf_path = save_mcb_redemption_c1_to_pdf(edited_form)
+            with open(pdf_path, "rb") as f:
+                st.sidebar.download_button(
+                    "Download PDF", 
+                    f, 
+                    file_name="mcb_redemption_c1_form_data.pdf", 
+                    mime="application/pdf", 
+                    use_container_width=True
+                )
+                st.success("MCB Redemption Form C-1 data saved successfully!")
+
+# ---------- Meezan Bank Specific Functions ----------
+def parse_meezan_account_opening_response(response_text: str) -> dict:
+    """Parse Meezan Bank Account Opening Form - Principal Account Holder"""
+    data = {}
+    
+    # Date and Account Type
+    date_fields = ["Day", "Month", "Year", "Type of Account"]
+    for field in date_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Principal Account Holder Information
+    principal_fields = [
+        "Name", "Father/Husband Name", "Mother Maiden Name", 
+        "CNIC/NICOP/Passport No", "Issuance Date", "Expiry Date",
+        "Date of Birth", "Marital Status", "Religion", "Place of Birth",
+        "Nationality", "Dual Nationality"
+    ]
+    
+    for field in principal_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Address Information
+    address_fields = [
+        "Mailing Address: Street", "Mailing Address: City", "Mailing Address: Country",
+        "Current Address: Street", "Current Address: City", "Current Address: Country"
+    ]
+    
+    for field in address_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    return data
+
+def parse_meezan_account_info(response_text: str) -> dict:
+    """Parse Meezan Bank Contact Details and Additional Information"""
+    data = {}
+    
+    # Contact Details
+    contact_fields = [
+        "Residential Status", "Email", "Mobile Network", "Tel/Res Office", "Mobile"
+    ]
+    
+    for field in contact_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Minor Account Information
+    minor_fields = [
+        "Name of Guardian", "Relation with Principal", 
+        "Guardian CNIC", "CNIC Expiry Date"
+    ]
+    
+    for field in minor_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Bank Account Details
+    bank_fields = [
+        "Bank Account No.", "Bank", "Branch", "City"
+    ]
+    
+    for field in bank_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Joint Account Holders
+    joint_holders = extract_meezan_joint_holders(response_text)
+    if joint_holders:
+        data["Joint Account Holders"] = joint_holders
+    
+    return data
+
+def parse_meezan_special_instructions(response_text: str) -> dict:
+    """Parse Meezan Bank Special Instructions"""
+    data = {}
+    
+    # Special Instructions
+    instruction_fields = [
+        "Account Operating Instructions", "Dividend Mandate", 
+        "Communication Mode", "Stock Dividend"
+    ]
+    
+    for field in instruction_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # MTPF Account Details
+    mtpf_fields = [
+        "Expected Retirement Date", "Allocation Scheme"
+    ]
+    
+    for field in mtpf_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    return data
+
+def extract_meezan_joint_holders(response_text: str) -> dict:
+    """Extract joint holder information for Meezan Bank"""
+    joint_data = {}
+    
+    # Look for joint holder sections
+    for i in range(1, 3):  # Assuming max 2 joint holders
+        holder_data = {}
+        fields = [
+            f"Relation with Principal",
+            f"Customer ID",
+            f"Name",
+            f"CNIC/NICOP/Passport",
+            f"Issuance Date",
+            f"Expiry Date"
+        ]
+        
+        for field in fields:
+            full_field = f"Joint Holder {i}: {field}"
+            value = extract_value(response_text, full_field)
+            if value:
+                holder_data[field] = value
+        
+        if holder_data:
+            joint_data[f"Joint Holder {i}"] = holder_data
+    
+    return joint_data if joint_data else None
+
+def save_meezan_to_pdf(data_dict1, data_dict2, data_dict3):
+    """Save Meezan Bank form data to PDF"""
+    PAGE_WIDTH, PAGE_HEIGHT = A4
+    pdf_file = "meezan_bank_form_data.pdf"
+    c = canvas.Canvas(pdf_file, pagesize=A4)
+    
+    # Header
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 50, "Meezan Bank Account Opening Form - Extracted Data")
+    
+    # Date and Account Type
+    c.setFont("Helvetica", 10)
+    c.drawString(40, PAGE_HEIGHT - 80, f"Date: {data_dict1.get('Day', '')}/{data_dict1.get('Month', '')}/{data_dict1.get('Year', '')}")
+    c.drawString(2 * PAGE_WIDTH / 3, PAGE_HEIGHT - 80, f"Type of Account: {data_dict1.get('Type of Account', '')}")
+    
+    # Principal Account Holder Section
+    y = PAGE_HEIGHT - 110
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, y, "PRINCIPAL ACCOUNT HOLDER")
+    
+    y -= 25
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"Name: {data_dict1.get('Name', '')}")
+    y -= 15
+    c.drawString(40, y, f"Father/Husband Name: {data_dict1.get('Father/Husband Name', '')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Mother's Maiden Name: {data_dict1.get('Mother Maiden Name', '')}")
+    y -= 15
+    c.drawString(40, y, f"CNIC/NICOP/Passport No: {data_dict1.get('CNIC/NICOP/Passport No', '')}")
+    y -= 15
+    c.drawString(40, y, f"Issuance Date: {data_dict1.get('Issuance Date', '')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Expiry Date: {data_dict1.get('Expiry Date', '')}")
+    y -= 15
+    c.drawString(40, y, f"Date of Birth: {data_dict1.get('Date of Birth', '')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Marital Status: {data_dict1.get('Marital Status', '')}")
+    y -= 15
+    c.drawString(40, y, f"Religion: {data_dict1.get('Religion', '')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Place of Birth: {data_dict1.get('Place of Birth', '')}")
+    y -= 15
+    c.drawString(40, y, f"Nationality: {data_dict1.get('Nationality', '')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Dual Nationality: {data_dict1.get('Dual Nationality', '')}")
+    
+    # Address Information
+    y -= 20
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "ADDRESS INFORMATION")
+    y -= 20
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, "Mailing Address:")
+    y -= 15
+    c.drawString(60, y, f"Street: {data_dict1.get('Mailing Address: Street', '')}")
+    y -= 15
+    c.drawString(60, y, f"City: {data_dict1.get('Mailing Address: City', '')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Country: {data_dict1.get('Mailing Address: Country', '')}")
+    y -= 15
+    c.drawString(40, y, "Current Address:")
+    y -= 15
+    c.drawString(60, y, f"Street: {data_dict1.get('Current Address: Street', '')}")
+    y -= 15
+    c.drawString(60, y, f"City: {data_dict1.get('Current Address: City', '')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Country: {data_dict1.get('Current Address: Country', '')}")
+    
+    # Contact Details
+    y -= 20
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "CONTACT DETAILS")
+    y -= 20
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"Residential Status: {data_dict2.get('Residential Status', '')}")
+    y -= 15
+    c.drawString(40, y, f"Email: {data_dict2.get('Email', '')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Mobile Network: {data_dict2.get('Mobile Network', '')}")
+    y -= 15
+    c.drawString(40, y, f"Mobile: {data_dict2.get('Mobile', '')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Tel/Res Office: {data_dict2.get('Tel/Res Office', '')}")
+    
+    # Special Instructions
+    y -= 20
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "SPECIAL INSTRUCTIONS")
+    y -= 20
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"Account Operating Instructions: {data_dict3.get('Account Operating Instructions', '')}")
+    y -= 15
+    c.drawString(40, y, f"Dividend Mandate: {data_dict3.get('Dividend Mandate', '')}")
+    c.drawString(PAGE_WIDTH / 2, y, f"Stock Dividend: {data_dict3.get('Stock Dividend', '')}")
+    y -= 15
+    c.drawString(40, y, f"Communication Mode: {data_dict3.get('Communication Mode', '')}")
+    
+    c.save()
+    return pdf_file
+
+# ---------- MCB Bank Specific Functions ----------
+def parse_mcb_funds_info(response_text: str) -> dict:
+    """Parse MCB Funds Account Opening Form"""
+    data = {}
+    
+    # Form header information
+    header_fields = ["DATE", "Purpose", "Investor Registration Number"]
+    for field in header_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Section 1: Principal Applicant's Details
+    principal_fields = [
+        "PRINCIPAL APPLICANT'S NAME", "FATHER/SPOUSE NAME", 
+        "CNIC/NICOP/PASSPORT No./B-FORM NO.", "MOTHER MAIDEN NAME",
+        "GENDER", "DATE OF BIRTH", "ZAKAT DEDUCTION", 
+        "PLACE OF BIRTH", "NATIONALITY"
+    ]
+    
+    for field in principal_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Section 2: Guardian's Details
+    guardian_fields = ["GUARDIAN NAME", "GUARDIAN CNIC/NICOP/PASSPORT No.", "RELATIONSHIP WITH MINOR"]
+    for field in guardian_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Section 3: Contact Details
+    contact_fields = [
+        "RESIDENTIAL ADDRESS", "RESIDENTIAL CITY/DISTRICT", "RESIDENTIAL POSTAL CODE", "RESIDENTIAL COUNTRY",
+        "OFFICE/BUSINESS ADDRESS", "OFFICE CITY/DISTRICT", "OFFICE POSTAL CODE", "OFFICE COUNTRY",
+        "MAILING ADDRESS", "TELEPHONE No. RES", "TELEPHONE No. OFF", "TELEPHONE EXT",
+        "FAX No.", "EMAIL ADDRESS", "MOBILE No."
+    ]
+    
+    for field in contact_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Section 4: Statement Delivery
+    statement_fields = ["STATEMENT DELIVERY"]
+    for field in statement_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Section 5: Bank Details
+    bank_fields = [
+        "BANK ACCOUNT TITLE", "COMPLETE BANK ACCOUNT No.", 
+        "BRANCH NAME & ADDRESS", "BANK NAME", "CITY", "IBAN"
+    ]
+    
+    for field in bank_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    return data
+
+def save_mcb_to_pdf(form_data):
+    """Save MCB Funds form data to PDF"""
+    PAGE_WIDTH, PAGE_HEIGHT = A4
+    pdf_file = "mcb_funds_form_data.pdf"
+    c = canvas.Canvas(pdf_file, pagesize=A4)
+    
+    # Header
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 50, "MCB Funds - Account Opening Form")
+    c.setFont("Helvetica", 10)
+    c.drawString(40, PAGE_HEIGHT - 70, f"Date: {form_data.get('DATE', '')}")
+    c.drawString(40, PAGE_HEIGHT - 85, f"Purpose: {form_data.get('Purpose', '')}")
+    c.drawString(40, PAGE_HEIGHT - 100, f"Investor Registration No: {form_data.get('Investor Registration Number', '')}")
+    
+    # Section 1: Principal Applicant's Details
+    y = PAGE_HEIGHT - 130
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, y, "1. PRINCIPAL APPLICANT'S DETAILS")
+    
+    y -= 25
+    c.setFont("Helvetica", 10)
+    principal_fields = [
+        "PRINCIPAL APPLICANT'S NAME", "FATHER/SPOUSE NAME", 
+        "CNIC/NICOP/PASSPORT No./B-FORM NO.", "MOTHER MAIDEN NAME",
+        "GENDER", "DATE OF BIRTH", "ZAKAT DEDUCTION", 
+        "PLACE OF BIRTH", "NATIONALITY"
+    ]
+    
+    for field in principal_fields:
+        if field in form_data:
+            c.drawString(40, y, f"{field}: {form_data[field]}")
+            y -= 15
+    
+    c.save()
+    return pdf_file
+
+# ---------- Allied Bank Specific Functions ----------
+def parse_allied_personal_info(response_text: str) -> dict:
+    """Parse personal information section from Allied Bank form"""
+    data = {}
+    
+    # Personal Information fields
+    personal_fields = [
+        "Full Name", "Father's Name", "Mother's Maiden Name", "Date of Birth",
+        "Spouse's Name", "Place of Birth", "Nationality", "Resident Status",
+        "Country of Residence", "CNIC#", "Passport / Alien Card / POC #",
+        "Marital Status", "Education", "Profession", "Occupation"
+    ]
+    
+    for field in personal_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Employment details
+    employment_fields = [
+        "Nature of Business", "Business/Employment Details", 
+        "Name of Business/Organization", "Designation"
+    ]
+    
+    for field in employment_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Contact information
+    contact_fields = [
+        "Business/Office Address", "Nearest Landmark", "Post Code",
+        "Tel#", "Fax #", "Mob #", "E-mail"
+    ]
+    
+    for field in contact_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    return data
+
+def save_allied_to_pdf(personal_data):
+    """Save Allied Bank form data to PDF"""
+    PAGE_WIDTH, PAGE_HEIGHT = A4
+    pdf_file = "allied_bank_form_data.pdf"
+    c = canvas.Canvas(pdf_file, pagesize=A4)
+    
+    # Header
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 50, "Allied Bank Account Opening Form - Extracted Data")
+    
+    # Personal Information Section
+    y = PAGE_HEIGHT - 80
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, y, "A. PERSONAL INFORMATION")
+    
+    y -= 25
+    c.setFont("Helvetica", 10)
+    
+    # Personal details in two columns
+    left_col = 40
+    right_col = PAGE_WIDTH / 2 + 20
+    
+    fields_left = [
+        "Full Name", "Father's Name", "Mother's Maiden Name", "Date of Birth",
+        "Spouse's Name", "Place of Birth", "Nationality", "Resident Status"
+    ]
+    
+    fields_right = [
+        "Country of Residence", "CNIC#", "Passport / Alien Card / POC #",
+        "Marital Status", "Education", "Profession", "Occupation"
+    ]
+    
+    # Left column
+    current_y = y
+    for field in fields_left:
+        if field in personal_data:
+            c.drawString(left_col, current_y, f"{field}: {personal_data[field]}")
+            current_y -= 15
+    
+    # Right column
+    current_y = y
+    for field in fields_right:
+        if field in personal_data:
+            c.drawString(right_col, current_y, f"{field}: {personal_data[field]}")
+            current_y -= 15
+    
+    c.save()
+    return pdf_file
+
+# ---------- Alfalah Bank Specific Functions ----------
+def parse_alfalah_investment_info(response_text: str) -> dict:
+    """Parse Alfalah Investment Account Opening Form A-1"""
+    data = {}
+    
+    # Form header information
+    header_fields = ["Investor Registration No", "Account Type", "Sole Proprietorship"]
+    for field in header_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Section 1: Principal Applicant's Details
+    principal_fields = [
+        "Name", "Father's/Husband's Name", "Mother's Maiden Name of Applicant",
+        "Sole Proprietorship Name", "CNIC/NICOP/ARC/POC/Passport No",
+        "Zakat Deduction", "Tax Status", "Date of Birth", "Issuance Date",
+        "Expiry Date", "Place of Birth", "Religion", "Marital Status",
+        "Nationality", "National Tax No", "Gender"
+    ]
+    
+    for field in principal_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Address Information
+    address_fields = [
+        "Current Mailing Address", "Current Mailing City", "Current Mailing Province", "Current Mailing Country",
+        "Permanent Address", "Permanent City", "Permanent Province", "Permanent Country",
+        "Business/Registered Address"
+    ]
+    
+    for field in address_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Contact Information
+    contact_fields = [
+        "Tel No", "Office No", "Mobile No", "Alternative Mobile No",
+        "WhatsApp No", "Email", "Investor's Signature"
+    ]
+    
+    for field in contact_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    return data
+
+def save_alfalah_to_pdf(form_data):
+    """Save Alfalah Bank Investment form data to PDF"""
+    PAGE_WIDTH, PAGE_HEIGHT = A4
+    pdf_file = "alfalah_investment_form_data.pdf"
+    c = canvas.Canvas(pdf_file, pagesize=A4)
+    
+    # Header
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 50, "Alfalah Investments - Account Opening Form A-1")
+    
+    # Account Type Section
+    y = PAGE_HEIGHT - 80
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, y, "ACCOUNT TYPE AND SOLE PROPRIETORSHIP")
+    
+    y -= 25
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"Account Type: {form_data.get('Account Type', '')}")
+    y -= 15
+    c.drawString(40, y, f"Sole Proprietorship: {form_data.get('Sole Proprietorship', '')}")
+    
+    c.save()
+    return pdf_file
+
+# ---------- Askari Bank Specific Functions ----------
+def parse_askari_investment_info(response_text: str) -> dict:
+    """Parse Askari Investment Management Account Opening Form"""
+    data = {}
+    
+    # Date Information
+    date_fields = ["DATE", "Day", "Month", "Year"]
+    for field in date_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Section 1: Principal Account Holder Information
+    principal_fields = [
+        "Full Name", "Father's/Husband's Name", "Mailing Address", 
+        "TYPE OF INSTITUTION", "CNIC", "E-mail", "Mobile No.", 
+        "Nationality", "Marital Status", "Country", "Gender", 
+        "Zakat Deduction", "Date of Birth"
+    ]
+    
+    for field in principal_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Section 4: Operating Instructions
+    operating_fields = ["Operating Instructions", "Solely"]
+    for field in operating_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Section 5: Other Instructions
+    other_instructions_fields = [
+        "Payment to be sent on registered address", 
+        "Dividend Distribution option"
+    ]
+    
+    for field in other_instructions_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    # Section 6: Declaration
+    declaration_fields = ["Principal Signatory", "Authorised Signatory", "Name"]
+    for field in declaration_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+    
+    return data
+
+def save_askari_to_pdf(form_data):
+    """Save Askari Bank Investment form data to PDF"""
+    PAGE_WIDTH, PAGE_HEIGHT = A4
+    pdf_file = "askari_investment_form_data.pdf"
+    c = canvas.Canvas(pdf_file, pagesize=A4)
+    
+    # Header
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 50, "Askari Investment Management - Account Opening Form")
+    c.setFont("Helvetica", 10)
+    c.drawString(40, PAGE_HEIGHT - 70, f"Date: {form_data.get('DATE', '')}")
+    
+    # Section 1: Principal Account Holder
+    y = PAGE_HEIGHT - 100
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, y, "1. INFORMATION ABOUT THE PRINCIPAL ACCOUNT HOLDER")
+    
+    y -= 25
+    c.setFont("Helvetica", 10)
+    
+    # Personal details in two columns
+    left_col = 40
+    right_col = PAGE_WIDTH / 2 + 20
+    
+    principal_fields_left = [
+        "Full Name", "Father's/Husband's Name", "Mailing Address", 
+        "TYPE OF INSTITUTION", "CNIC", "E-mail"
+    ]
+    
+    principal_fields_right = [
+        "Mobile No.", "Nationality", "Marital Status", "Country", 
+        "Gender", "Zakat Deduction", "Date of Birth"
+    ]
+    
+    # Left column
+    current_y = y
+    for field in principal_fields_left:
+        if field in form_data:
+            c.drawString(left_col, current_y, f"{field}: {form_data[field]}")
+            current_y -= 15
+    
+    # Right column
+    current_y = y
+    for field in principal_fields_right:
+        if field in form_data:
+            c.drawString(right_col, current_y, f"{field}: {form_data[field]}")
+            current_y -= 15
+    
+    c.save()
+    return pdf_file
+
+# ---------- Bank Processing Functions ----------
+def process_meezan_form(uploaded_file, col2):
+    """Process Meezan Bank form"""
+    meezan_prompt1 = """Extract the following details from the form in a structured and complete manner: * Date: [Your answer here] * Day: [Your answer here] * Month: [Your answer here] * Year: [Your answer here] * Type of Account: [Your answer here] * Principal Account Holder: * Name: [Your answer here] * Father/Husband Name: [Your answer here] * Mother Maiden Name: [Your answer here] * CNIC/NICOP/Passport No: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Date of Birth: [Your answer here] * Marital Status: [Your answer here] * Religion: [Your answer here] * Place of Birth: [Your answer here] * Nationality: [Your answer here] * Dual Nationality: [Your answer here] * Mailing Address: * Street: [Your answer here] * City: [Your answer here] * Country: [Your answer here] * Current Address: * Street: [Your answer here] * City: [Your answer here] * Country: [Your answer here] Leave any field blank if the information is missing or not available."""
+    
+    meezan_prompt2 = "Extract the following details from the form in a structured and complete manner: * Residential Status: [Your answer here] * Email: [Your answer here] * Mobile Network: [Your answer here] * Tel/Res Office: [Your answer here] * Mobile: [Your answer here] * In Case of Minor Account: * Name of Guardian: [Your answer here] * Relation with Principal: [Your answer here] * Guardian CNIC: [Your answer here] * CNIC Expiry Date: [Your answer here] * Bank Account Detail: * Bank Account No.: [Your answer here] * Bank: [Your answer here] * Branch: [Your answer here] * City: [Your answer here] * Joint Account Holders: * Joint Holder 1: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Joint Holder 2: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here]Leave blank if missing"
+    
+    meezan_prompt3 = """Extract the following details from the form should in a structured and complete manner:
+
+        Special Instructions:
+        Account Operating Instructions: [e.g., Either or Survivor, Jointly Operated, etc.]
+
+        Dividend Mandate: [e.g., Credit to Bank Account, Reinvest, etc.]
+        Communication Mode: [e.g., Email, Postal Mail, etc.]
+
+        Stock Dividend: [e.g., Yes, No, or method of delivery]
+
+        Detail About Meezan Tahaffuz Pension Fund (MTPF) Account:
+        Expected Retirement Date: [DD/MM/YYYY]
+
+        Allocation Scheme: [List all ticked or checked options, e.g., Equity, Debt, Money Market. Leave blank if none are selected.]
+
+        Please ensure only the checked/ticked values are included in the "Allocation Scheme" list. If no boxes are selected, return an empty list."""
+    
+    # Process Meezan form with three prompts
+    if "meezan_response1" not in st.session_state:
+        with st.spinner("Extracting principal account holder details..."):
+            response1 = call_openai_api_with_image(uploaded_file, meezan_prompt1)
+            st.session_state.meezan_response1 = response1
+    
+    if "meezan_response2" not in st.session_state:
+        with st.spinner("Extracting contact and joint holder details..."):
+            response2 = call_openai_api_with_image(uploaded_file, meezan_prompt2)
+            st.session_state.meezan_response2 = response2
+    
+    if "meezan_response3" not in st.session_state:
+        with st.spinner("Extracting special instructions..."):
+            response3 = call_openai_api_with_image(uploaded_file, meezan_prompt3)
+            st.session_state.meezan_response3 = response3
+    
+    if all(key in st.session_state for key in ["meezan_response1", "meezan_response2", "meezan_response3"]):
+        # Parse all three responses
+        parsed_data1 = parse_meezan_account_opening_response(st.session_state.meezan_response1)
+        parsed_data2 = parse_meezan_account_info(st.session_state.meezan_response2)
+        parsed_data3 = parse_meezan_special_instructions(st.session_state.meezan_response3)
+        
+        flat_data1 = flatten_dict(parsed_data1)
+        flat_data2 = flatten_dict(parsed_data2)
+        flat_data3 = flatten_dict(parsed_data3)
+        
+        with col2:
+            st.markdown("### 📝 Meezan Bank Form Data")
+            with st.container(height=700):
+                with st.form("meezan_bank_form"):
+                    edited_form1 = {}
+                    edited_form2 = {}
+                    edited_form3 = {}
+                    
+                    cols = st.columns(2)
+                    
+                    # Section 1: Principal Account Holder
+                    st.subheader("Principal Account Holder")
+                    for idx, (field, value) in enumerate(flat_data1.items()):
+                        col = cols[idx % 2]
+                        with col:
+                            edited_form1[field] = st.text_input(field, value=value if value else "")
+                    
+                    # Section 2: Contact Details
+                    st.subheader("Contact Details")
+                    for idx, (field, value) in enumerate(flat_data2.items()):
+                        col = cols[idx % 2]
+                        with col:
+                            edited_form2[field] = st.text_input(field, value=value if value else "")
+                    
+                    # Section 3: Special Instructions
+                    st.subheader("Special Instructions")
+                    for idx, (field, value) in enumerate(flat_data3.items()):
+                        col = cols[idx % 2]
+                        with col:
+                            edited_form3[field] = st.text_input(field, value=value if value else "")
+                    
+                    submitted = st.form_submit_button("Save Form")
+        
+        # Display extracted data
+        st.subheader('Principal Account Holder')
+        st.write(st.session_state.meezan_response1)
+        
+        st.subheader('Contact Details')
+        display_dict(parsed_data2)
+        
+        st.subheader('Special Instructions')
+        display_dict(parsed_data3)
+        
+        if submitted:
+            pdf_path = save_meezan_to_pdf(edited_form1, edited_form2, edited_form3)
+            with open(pdf_path, "rb") as f:
+                st.sidebar.download_button(
+                    "Download PDF", 
+                    f, 
+                    file_name="meezan_bank_form_data.pdf", 
+                    mime="application/pdf", 
+                    use_container_width=True
+                )
+                st.success("Meezan Bank Form data saved successfully!")
+
+def process_mcb_form(uploaded_file, col2):
+    """Process MCB Bank form"""
+    mcb_prompt = """
+    Extract ALL information from this MCB Funds Account Opening Form. Focus on these specific sections:
+
+    FORM HEADER:
+    - DATE
+    - Purpose (NEW ACCOUNT OPENING, EXISTING ACCOUNT REG NO. REGULARIZATION, EXISTING ACCOUNT REG NO. UPGRADATION)
+    - Investor Registration Number (for official use only)
+
+    SECTION 1: PRINCIPAL APPLICANT'S DETAILS:
+    - PRINCIPAL APPLICANT'S NAME (as per CNIC/NICOP/PASSPORT No./B-Form No.)
+    - FATHER/SPOUSE NAME (as per identity document)
+    - CNIC/NICOP/PASSPORT No./B-FORM NO.
+    - MOTHER MAIDEN NAME
+    - GENDER (MALE, FEMALE, TRANSGENDER)
+    - DATE OF BIRTH
+    - ZAKAT DEDUCTION (Yes/No)
+    - PLACE OF BIRTH
+    - NATIONALITY
+
+    SECTION 2: GUARDIAN'S DETAILS (For Minor Applicant):
+    - GUARDIAN NAME (as per CNIC/NICOP/PASSPORT No.)
+    - GUARDIAN CNIC/NICOP/PASSPORT No.
+    - RELATIONSHIP WITH MINOR
+
+    SECTION 3: CONTACT DETAILS:
+    - RESIDENTIAL ADDRESS (City/District, Postal Code, Country)
+    - OFFICE/BUSINESS ADDRESS (City/District, Postal Code, Country)
+    - MAILING ADDRESS (RESIDENTIAL ADDRESS or OFFICE/BUSINESS ADDRESS)
+    - TELEPHONE No. (RES, OFF, EXT)
+    - FAX No.
+    - EMAIL ADDRESS
+    - MOBILE No.
+
+    SECTION 4: STATEMENT OF ACCOUNT DELIVERY:
+    - Delivery Method (By Email, By Post)
+
+    SECTION 5: BANK DETAILS:
+    - BANK ACCOUNT TITLE
+    - COMPLETE BANK ACCOUNT No.
+    - BRANCH NAME & ADDRESS
+    - BANK NAME
+    - CITY
+    - IBAN
+
+    Extract all text exactly as it appears on the form.
+    """
+    
+    response_key = "mcb_response"
+    if response_key not in st.session_state:
+        with st.spinner("Extracting data from MCB Funds form..."):
+            response = call_openai_api_with_image(uploaded_file, mcb_prompt)
+            st.session_state[response_key] = response
+    
+    if response_key in st.session_state:
+        parsed_data = parse_mcb_funds_info(st.session_state[response_key])
+        flat_data = flatten_dict(parsed_data)
+        
+        with col2:
+            st.markdown("### 📝 MCB Funds Form Data")
+            with st.container(height=700):
+                with st.form("mcb_bank_form"):
+                    edited_form = {}
+                    cols = st.columns(2)
+                    
+                    for idx, (field, value) in enumerate(flat_data.items()):
+                        col = cols[idx % 2]
+                        with col:
+                            if field in ["Purpose", "GENDER", "ZAKAT DEDUCTION", "MAILING ADDRESS", "STATEMENT DELIVERY"]:
+                                if field == "Purpose":
+                                    options = ["NEW ACCOUNT OPENING", "EXISTING ACCOUNT REG NO. REGULARIZATION", "EXISTING ACCOUNT REG NO. UPGRADATION"]
+                                elif field == "GENDER":
+                                    options = ["Male", "Female", "Transgender"]
+                                elif field == "ZAKAT DEDUCTION":
+                                    options = ["Yes", "No"]
+                                elif field == "MAILING ADDRESS":
+                                    options = ["RESIDENTIAL ADDRESS", "OFFICE/BUSINESS ADDRESS"]
+                                elif field == "STATEMENT DELIVERY":
+                                    options = ["By Email", "By Post"]
+                                else:
+                                    options = [value] if value else [""]
+                                
+                                default_index = options.index(value) if value in options else 0
+                                edited_form[field] = st.selectbox(field, options, index=default_index)
+                            else:
+                                edited_form[field] = st.text_input(field, value=value if value else "")
+                    
+                    submitted = st.form_submit_button("Save Form")
+        
+        st.subheader('Extracted Data from MCB Funds Form')
+        st.write(st.session_state[response_key])
+        
+        st.subheader('Structured Data')
+        display_dict(parsed_data)
+        
+        if submitted:
+            pdf_path = save_mcb_to_pdf(edited_form)
+            with open(pdf_path, "rb") as f:
+                st.sidebar.download_button(
+                    "Download PDF", 
+                    f, 
+                    file_name="mcb_funds_form_data.pdf", 
+                    mime="application/pdf", 
+                    use_container_width=True
+                )
+                st.success("MCB Form data saved successfully!")
+
+def process_allied_form(uploaded_file, col2):
+    """Process Allied Bank form"""
+    allied_prompt = """
+    Extract ALL information from this Allied Bank Account Opening Form. Focus on these specific sections:
+
+    A. PERSONAL INFORMATION:
+    - Full Name (as per ID Document)
+    - Father's Name
+    - Mother's Maiden Name
+    - Date of Birth
+    - Spouse's Name
+    - Place of Birth
+    - Nationality
+    - Resident Status (Resident/Non-Resident)
+    - Country of Residence
+    - CNIC# (for Pakistani Nationals)
+    - Passport/Alien Card/POC # (for Foreign Nationals)
+    - Marital Status (Single/Married)
+    - Education (Up to Matric/O-Level, Intermediate/A-Level, Bachelors)
+    - Profession (Student, Housewife, Agriculturist, Other)
+    - Occupation (Self-employed, Salaried, Other)
+
+    EMPLOYMENT DETAILS (if applicable):
+    - Nature of Business (if self-employed): Retail, Trading, Services, Manufacturing, Self-employed professional, Other
+    - Business/Employment Details: Federal Government, Provincial Government, Semi-Government, Private Service, Allied Bank Employee, Other
+    - Name of Business/Organization
+    - Designation
+
+    CONTACT INFORMATION:
+    - Business/Office Address
+    - Nearest Landmark
+    - Post Code
+    - Tel#
+    - Fax #
+    - Mob #
+    - E-mail
+
+    Extract all text exactly as it appears on the form.
+    """
+    
+    response_key = "allied_response"
+    if response_key not in st.session_state:
+        with st.spinner("Extracting data from Allied Bank form..."):
+            response = call_openai_api_with_image(uploaded_file, allied_prompt)
+            st.session_state[response_key] = response
+    
+    if response_key in st.session_state:
+        parsed_data = parse_allied_personal_info(st.session_state[response_key])
+        flat_data = flatten_dict(parsed_data)
+        
+        with col2:
+            st.markdown("### 📝 Allied Bank Form Data")
+            with st.container(height=700):
+                with st.form("allied_bank_form"):
+                    edited_form = {}
+                    cols = st.columns(2)
+                    
+                    for idx, (field, value) in enumerate(flat_data.items()):
+                        col = cols[idx % 2]
+                        with col:
+                            if field in ["Marital Status", "Resident Status", "Education", "Profession", "Occupation", "Nature of Business", "Business/Employment Details"]:
+                                if field == "Marital Status":
+                                    options = ["Single", "Married"]
+                                elif field == "Resident Status":
+                                    options = ["Resident", "Non-Resident"]
+                                elif field == "Education":
+                                    options = ["Up to Matric/O-Level", "Intermediate/A-Level", "Bachelors"]
+                                elif field == "Profession":
+                                    options = ["Student", "Housewife", "Agriculturist", "Other"]
+                                elif field == "Occupation":
+                                    options = ["Self-employed", "Salaried", "Other"]
+                                elif field == "Nature of Business":
+                                    options = ["Retail", "Trading", "Services", "Manufacturing", "Self-employed professional", "Other"]
+                                elif field == "Business/Employment Details":
+                                    options = ["Federal Government Employee", "Provincial Government Employee", "Semi-Government Employee", "Private Service", "Allied Bank Employee", "Other"]
+                                else:
+                                    options = [value] if value else [""]
+                                
+                                default_index = options.index(value) if value in options else 0
+                                edited_form[field] = st.selectbox(field, options, index=default_index)
+                            else:
+                                edited_form[field] = st.text_input(field, value=value if value else "")
+                    
+                    submitted = st.form_submit_button("Save Form")
+        
+        st.subheader('Extracted Data from Allied Bank Form')
+        st.write(st.session_state[response_key])
+        
+        st.subheader('Structured Data')
+        display_dict(parsed_data)
+        
+        if submitted:
+            pdf_path = save_allied_to_pdf(edited_form)
+            with open(pdf_path, "rb") as f:
+                st.sidebar.download_button(
+                    "Download PDF", 
+                    f, 
+                    file_name="allied_bank_form_data.pdf", 
+                    mime="application/pdf", 
+                    use_container_width=True
+                )
+                st.success("Allied Bank Form data saved successfully!")
+
+def process_alfalah_form(uploaded_file, col2):
+    """Process Alfalah Bank form"""
+    alfalah_prompt = """
+    Extract ALL information from this Alfalah Investments Account Opening Form A-1 for Individual Investor. Focus on these specific sections:
+
+    FORM HEADER:
+    - Investor Registration No (For Office Use Only)
+    - Account Type (Single, Joint, Minor, Sole Proprietorship)
+    - Sole Proprietorship (Partnership, Registered, Unregistered)
+
+    SECTION 1: PRINCIPAL APPLICANT'S DETAILS:
+    - Name (Mr./Ms./Mrs.)
+    - Father's/Husband's Name
+    - Mother's Maiden Name of Applicant
+    - Sole Proprietorship Name (if applicable)
+    - CNIC/NICOP/ARC/POC/Passport No
+    - Zakat Deduction (Yes/No)
+    - Tax Status (Filer/Non-Filer)
+    - Date of Birth
+    - Issuance Date
+    - Expiry Date
+    - Place of Birth
+    - Religion
+    - Marital Status
+    - Nationality
+    - National Tax No (NTN)
+    - Gender (Male/Female)
+
+    ADDRESS INFORMATION:
+    - Current Mailing Address (City, Province, Country)
+    - Permanent Address (City, Province, Country)
+    - Business/Registered Address (for sole proprietors)
+
+    CONTACT INFORMATION:
+    - Tel No (Res)
+    - Office No
+    - Mobile No
+    - Alternative Mobile No
+    - WhatsApp No
+    - Email
+    - Investor's Signature
+
+    Extract all text exactly as it appears on the form.
+    """
+    
+    response_key = "alfalah_response"
+    if response_key not in st.session_state:
+        with st.spinner("Extracting data from Alfalah Bank form..."):
+            response = call_openai_api_with_image(uploaded_file, alfalah_prompt)
+            st.session_state[response_key] = response
+    
+    if response_key in st.session_state:
+        parsed_data = parse_alfalah_investment_info(st.session_state[response_key])
+        flat_data = flatten_dict(parsed_data)
+        
+        with col2:
+            st.markdown("### 📝 Alfalah Bank Form Data")
+            with st.container(height=700):
+                with st.form("alfalah_bank_form"):
+                    edited_form = {}
+                    cols = st.columns(2)
+                    
+                    for idx, (field, value) in enumerate(flat_data.items()):
+                        col = cols[idx % 2]
+                        with col:
+                            if field in ["Account Type", "Zakat Deduction", "Tax Status", "Gender", "Marital Status"]:
+                                if field == "Account Type":
+                                    options = ["Single", "Joint", "Minor", "Sole Proprietorship"]
+                                elif field == "Zakat Deduction":
+                                    options = ["Yes", "No"]
+                                elif field == "Tax Status":
+                                    options = ["Filer", "Non-Filer"]
+                                elif field == "Gender":
+                                    options = ["Male", "Female"]
+                                elif field == "Marital Status":
+                                    options = ["Single", "Married"]
+                                else:
+                                    options = [value] if value else [""]
+                                
+                                default_index = options.index(value) if value in options else 0
+                                edited_form[field] = st.selectbox(field, options, index=default_index)
+                            else:
+                                edited_form[field] = st.text_input(field, value=value if value else "")
+                    
+                    submitted = st.form_submit_button("Save Form")
+        
+        st.subheader('Extracted Data from Alfalah Investment Form')
+        st.write(st.session_state[response_key])
+        
+        st.subheader('Structured Data')
+        display_dict(parsed_data)
+        
+        if submitted:
+            pdf_path = save_alfalah_to_pdf(edited_form)
+            with open(pdf_path, "rb") as f:
+                st.sidebar.download_button(
+                    "Download PDF", 
+                    f, 
+                    file_name="alfalah_investment_form_data.pdf", 
+                    mime="application/pdf", 
+                    use_container_width=True
+                )
+                st.success("Alfalah Bank Form data saved successfully!")
+
+def process_askari_form(uploaded_file, col2):
+    """Process Askari Bank form"""
+    askari_prompt = """
+    Extract ALL information from this Askari Investment Management Account Opening Form. Focus on these specific sections:
+
+    DATE INFORMATION:
+    - DATE (Day/Month/Year)
+
+    SECTION 1: INFORMATION ABOUT THE PRINCIPAL ACCOUNT HOLDER
+    - Full Name
+    - Father's/Husband's Name
+    - Mailing Address
+    - TYPE OF INSTITUTION (Individual/Corporate/Institution)
+    - CNIC
+    - E-mail
+    - Mobile No.
+    - Nationality
+    - Marital Status (Single/Married)
+    - Country
+    - Gender (Male/Female)
+    - Zakat Deduction (Yes/No)
+    - Date of Birth
+
+    SECTION 2: JOINT ACCOUNT HOLDERS (if any)
+    - Extract any information about joint account holders
+
+    SECTION 3: NOMINEE INFORMATION (if any)
+    - Extract any information about nominees
+
+    SECTION 4: OPERATING INSTRUCTIONS
+    - Operating Instructions (Solely/Jointly/etc.)
+    - Who can operate the account
+
+    SECTION 5: OTHER INSTRUCTIONS
+    - Payment to be sent on registered address (Yes/No)
+    - Dividend Distribution option (Reinvest Dividend/Credit to Bank Account/Pay by Cheque)
+
+    SECTION 6: DECLARATION
+    - Principal/Authorised Signatory
+    - Name
+
+    Extract all text exactly as it appears on the form. If a section is blank, mark it as "Not provided".
+    Present the information in a structured format with clear section headings.
+    """
+    
+    response_key = "askari_response"
+    if response_key not in st.session_state:
+        with st.spinner("Extracting data from Askari Bank form..."):
+            response = call_openai_api_with_image(uploaded_file, askari_prompt)
+            st.session_state[response_key] = response
+    
+    if response_key in st.session_state:
+        parsed_data = parse_askari_investment_info(st.session_state[response_key])
+        flat_data = flatten_dict(parsed_data)
+        
+        with col2:
+            st.markdown("### 📝 Askari Bank Form Data")
+            with st.container(height=700):
+                with st.form("askari_bank_form"):
+                    edited_form = {}
+                    cols = st.columns(2)
+                    
+                    for idx, (field, value) in enumerate(flat_data.items()):
+                        col = cols[idx % 2]
+                        with col:
+                            if field in ["Marital Status", "Gender", "Zakat Deduction", "TYPE OF INSTITUTION", "Dividend Distribution option"]:
+                                if field == "Marital Status":
+                                    options = ["Single", "Married"]
+                                elif field == "Gender":
+                                    options = ["Male", "Female"]
+                                elif field == "Zakat Deduction":
+                                    options = ["Yes", "No"]
+                                elif field == "TYPE OF INSTITUTION":
+                                    options = ["Individual", "Corporate", "Institution"]
+                                elif field == "Dividend Distribution option":
+                                    options = ["Reinvest Dividend", "Credit to Bank Account", "Pay by Cheque"]
+                                else:
+                                    options = [value] if value else [""]
+                                
+                                default_index = options.index(value) if value in options else 0
+                                edited_form[field] = st.selectbox(field, options, index=default_index)
+                            else:
+                                edited_form[field] = st.text_input(field, value=value if value else "")
+                    
+                    submitted = st.form_submit_button("Save Form")
+        
+        st.subheader('Extracted Data from Askari Investment Form')
+        st.write(st.session_state[response_key])
+        
+        st.subheader('Structured Data')
+        display_dict(parsed_data)
+        
+        if submitted:
+            pdf_path = save_askari_to_pdf(edited_form)
+            with open(pdf_path, "rb") as f:
+                st.sidebar.download_button(
+                    "Download PDF", 
+                    f, 
+                    file_name="askari_investment_form_data.pdf", 
+                    mime="application/pdf", 
+                    use_container_width=True
+                )
+                st.success("Askari Bank Form data saved successfully!")
+
 # ---------- PAGE CONFIG ----------
-st.set_page_config(page_title="Form AI Parser", layout="wide")
+st.set_page_config(page_title="Multi-Bank Form Parser", layout="wide")
 
 # ---------- BRAND COLORS ----------
-PRIMARY_COLOR = "#4B006E"  # Meezan purple
-SECONDARY_COLOR = "#007A4D"  # Meezan green
+PRIMARY_COLOR = "#1E1E1E"     # Deep Dark Gray/Black (Main background)
+SECONDARY_COLOR = "#00B894"   # Mint/Teal (Logo/Heading accent)
 BACKGROUND_COLOR = "#F8F9FA"
 
 # ---------- LOGO PATHS ----------
-logo_path = "OfficeFlow Ai-01-01.png"       # your Meezan Bank logo
-dashboard_preview = "dashboard.png"  # your dashboard screenshot
+logo_path = "OfficeFlow Ai-01-01.png"
+dashboard_preview = "dashboard.png"
 
 # ---------- CUSTOM CSS ----------
 st.markdown(
@@ -568,17 +1943,19 @@ st.markdown(
     }}
     .left-side {{
         background: linear-gradient(145deg, {PRIMARY_COLOR} 40%, {SECONDARY_COLOR} 100%);
-        height: 100vh;
+        height: 105vh;
         width: 100%;
         color: white;
         padding: 3rem 2rem;
         display: flex;
         align-items: center;
         justify-content: center;
+        border-radius: 50px 50px 50px 50px;
+        overflow: hidden;
     }}
     .left-side img {{
-        width: 90%;
-        max-width: 600px;
+        width: 110%;
+        max-width: 700px;
         border-radius: 20px;
         box-shadow: 0 0 25px rgba(0,0,0,0.2);
     }}
@@ -589,16 +1966,16 @@ st.markdown(
         max-width: 420px;
         margin: auto;
         text-align: center;
+
     }}
     h2 {{
         color: {PRIMARY_COLOR};
         font-weight: 800;
     }}
     p {{
-        
         margin-bottom: 2rem;
     }}
-    .stTextInput > div > div > input {{
+    .stTextInput > div > div > div > input {{
         border-radius: 10px;
         border: 1px solid #ccc;
         padding: 10px;
@@ -611,8 +1988,6 @@ st.markdown(
         font-weight: 600;
         height: 3rem;
         border: none;
-        font-color: white;
-       
     }}
     .stButton > button:hover {{
         background-color: {SECONDARY_COLOR};
@@ -635,189 +2010,102 @@ st.markdown(
         gap: 2rem;
         align-items: flex-start;
         justify-content: space-between;
-        }}
-    
-    
+    }}
     </style>
     """,
     unsafe_allow_html=True
 )
+
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+
 if st.session_state.logged_in:
-    st.title("📄 AI Form Extractor")
-    st.sidebar.image('disruptlabs-logo-1.png',use_container_width='auto')
+    st.title("Multi-Bank Form Parser")
+   
+    # Concise app description
+    st.info("""
+    **AI-Powered Bank Form Processing**
+    
+    Automatically extracts data from scanned banking forms with advanced OCR and AI technology. 
+    Supports multiple Pakistani banks including Meezan, MCB, Allied, Alfalah, and Askari Bank.
+    
+    Upload your form (JPG, JPEG, PNG, or PDF) to get started!
+    """)
+
+    st.sidebar.image('OfficeFlow Ai-01-01.png', use_container_width='auto')
     st.sidebar.button("Logout", on_click=lambda: st.session_state.update(logged_in=False))
-    option = st.sidebar.selectbox(
-    "Please select the appropriate form type:",
-    ("Custom Form","Meezan Bank Form"),
+    
+    # Multi-bank dropdown with ALL 5 banks
+    bank_option = st.sidebar.selectbox(
+        "Select Bank Form Type:",
+        ["Meezan Bank", "MCB Bank", "Allied Bank", "Alfalah Bank", "Askari Bank", "MCB Redemption C-1", "MCB Early Redemption","Custom Form"],
+        key="bank_selector"
     )
+    
     uploaded_file = st.sidebar.file_uploader("📤 Upload scanned form", type=["jpg", "jpeg", "png", "pdf"])
+    
     if uploaded_file:
         new_hash = file_hash(uploaded_file)
-        # Check if file changed
         if "file_hash" not in st.session_state or st.session_state.file_hash != new_hash:
-            # Reset session_state for new file
-            print('New File')
             st.session_state.file_hash = new_hash
-            # restart_ollama()
-            for key in ["response", "response2", "response3"]:
+            # Clear previous responses when file changes
+            for key in ["meezan_response1", "meezan_response2", "meezan_response3", 
+                       "mcb_response", "allied_response", "alfalah_response", 
+                       "askari_response", "mcb_redemption_general_response", "mcb_early_redemption_response","custom_response"]:
                 if key in st.session_state:
                     del st.session_state[key]
-        print('re-runned')
-        image_pil = Image.open(uploaded_file).convert("RGB")
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            st.image(image_pil, caption="Uploaded Form", use_container_width=True)
-        #st.image(image_pil, caption="Uploaded Form", use_container_width=True)
-        if option == "Meezan Bank Form":
-            prompt = """Extract the following details from the form in a structured and complete manner: * Date: [Your answer here] * Day: [Your answer here] * Month: [Your answer here] * Year: [Your answer here] * Type of Account: [Your answer here] * Principal Account Holder: * Name: [Your answer here] * Father/Husband Name: [Your answer here] * Mother Maiden Name: [Your answer here] * CNIC/NICOP/Passport No: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Date of Birth: [Your answer here] * Marital Status: [Your answer here] * Religion: [Your answer here] * Place of Birth: [Your answer here] * Nationality: [Your answer here] * Dual Nationality: [Your answer here] * Mailing Address: * Street: [Your answer here] * City: [Your answer here] * Country: [Your answer here] * Current Address: * Street: [Your answer here] * City: [Your answer here] * Country: [Your answer here] Leave any field blank if the information is missing or not available."
-    """
-
-            if "response" not in st.session_state:
-                response = call_openai_api_with_image(uploaded_file, prompt)
-                st.session_state.response = response   
-            prompt2 = "Extract the following details from the form in a structured and complete manner: * Residential Status: [Your answer here] * Email: [Your answer here] * Mobile Network: [Your answer here] * Tel/Res Office: [Your answer here] * Mobile: [Your answer here] * In Case of Minor Account: * Name of Guardian: [Your answer here] * Relation with Principal: [Your answer here] * Guardian CNIC: [Your answer here] * CNIC Expiry Date: [Your answer here] * Bank Account Detail: * Bank Account No.: [Your answer here] * Bank: [Your answer here] * Branch: [Your answer here] * City: [Your answer here] * Joint Account Holders: * Joint Holder 1: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Joint Holder 2: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here]Leave blank if missing"
-            if "response2" not in st.session_state:
-                response2 = call_openai_api_with_image(uploaded_file, prompt2)
-                st.session_state.response2 =  response2
-            prompt3 = """Extract the following details from the form should in a structured and complete manner:
-
-        Special Instructions:
-        Account Operating Instructions: [e.g., Either or Survivor, Jointly Operated, etc.]
-
-        Dividend Mandate: [e.g., Credit to Bank Account, Reinvest, etc.]
-        Communication Mode: [e.g., Email, Postal Mail, etc.]
-
-        Stock Dividend: [e.g., Yes, No, or method of delivery]
-
-        Detail About Meezan Tahaffuz Pension Fund (MTPF) Account:
-        Expected Retirement Date: [DD/MM/YYYY]
-
-        Allocation Scheme: [List all ticked or checked options, e.g., Equity, Debt, Money Market. Leave blank if none are selected.]
-
-        Please ensure only the checked/ticked values are included in the "Allocation Scheme" list. If no boxes are selected, return an empty list."""
-            if "response3" not in st.session_state:
-                response3 = call_openai_api_with_image(uploaded_file, prompt3)
-                st.session_state.response3 = response3
-            # print(response)
-            if "response" in st.session_state:
-                parsed_data = parse_account_opening_response(st.session_state.response)
-                # print('parsed data:',parsed_data)
-                flat_data = flatten_dict(parsed_data)
-                parsed_data2 = parse_account_info(st.session_state.response2)
-                flat_data2 = flatten_dict(parsed_data2)
-                parsed_data3 = parse_special_instructions(st.session_state.response3)
-                flat_data3 = flatten_dict(parsed_data3)
-                # form_data = parse_response(response)
-
-            # ---- Display Editable Form ----
-                # Right column - Editable Form
-                with col2:
-                    st.markdown("### 📝 Edited Form Data")
-                    with st.container(height=700):
-                        with st.form("bank_form"):
-                            edited_form = {}
-                            edited_form2= {}
-                            edited_form3 = {}
-                            # Create two columns
-                            cols = st.columns(2)
-                            # Loop with index to alternate between columns
-                            for idx, (field, value) in enumerate(flat_data.items()):
-                                col = cols[idx % 2]  # Alternate between col[0] and col[1]
-                                with col:
-                                    edited_form[field] = st.text_input(field, value)
-                            for idx, (field, value) in enumerate(flat_data2.items()):
-                                col = cols[idx % 2]  # Alternate between col[0] and col[1]
-                                with col:
-                                    edited_form2[field] = st.text_input(field, value)
-                            for idx, (field, value) in enumerate(flat_data3.items()):
-                                col = cols[idx % 2]  # Alternate between col[0] and col[1]
-                                with col:
-                                    edited_form3[field] = st.text_input(field, value)
-                            submitted = st.form_submit_button("Save Form")
-                # print(response2)
-                # print(response3)
-                # st.write("### Response:")
-                st.subheader('Principal Account Holder')
-                st.write(st.session_state.response)
-                # print('edited form', edited_form)
-                st.subheader('Contact Details')
-                parsed_data2 = parse_account_info(st.session_state.response2)
-                # print('parsed data2:',parsed_data2)
-                #flat_data2 =flatten_dict(parsed_data2)
-                display_dict(parsed_data2)
-                parsed_data3 = parse_special_instructions(st.session_state.response3)
-                st.subheader('Special Instructions')
-                # print('parsed data3:',parsed_data3)
-                display_dict(parsed_data3)
-                st.write(st.session_state.response2)
-                st.write(st.session_state.response3)
-                # combined_data = {
-                #         "First Response (Editable)": editable_response,
-                #         "Second Response": response2,
-                #         "Third Response": response3
-                #     }
-                print('Form2',edited_form2)
-                print('form3',edited_form3)
-                pdf_path = save_to_pdf(edited_form, edited_form2, edited_form3)
-                with open(pdf_path, "rb") as f:
-                    st.sidebar.download_button("Download PDF", f, file_name="bank_form_data.pdf", mime="application/pdf", use_container_width=True)
+        
+        # Display the uploaded file
+        if uploaded_file.type == "application/pdf":
+            # For PDF files, convert to image and display first page
+            if PDF_SUPPORT:
+                pdf_images = convert_pdf_to_images(uploaded_file)
+                if pdf_images and len(pdf_images) > 0:
+                    image_pil = pdf_images[0]
+                    st.info(f"📄 PDF detected with {len(pdf_images)} pages. Processing first page.")
+                else:
+                    st.error("Failed to convert PDF to images.")
         else:
-            custom_response = call_openai_api_with_image(uploaded_file)
+            # For image files
+            image_pil = Image.open(uploaded_file).convert("RGB")
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.image(image_pil, caption=f"Uploaded {bank_option} Form", use_container_width=True)
+        
+        # Process based on selected bank
+        if bank_option == "Meezan Bank":
+            process_meezan_form(uploaded_file, col2)
+        elif bank_option == "MCB Bank":
+            process_mcb_form(uploaded_file, col2)
+        elif bank_option == "Allied Bank":
+            process_allied_form(uploaded_file, col2)
+        elif bank_option == "Alfalah Bank":
+            process_alfalah_form(uploaded_file, col2)
+        elif bank_option == "Askari Bank":
+            process_askari_form(uploaded_file, col2)
+        elif bank_option == "MCB Redemption C-1":  
+            process_mcb_redemption_c1(uploaded_file, col2)  
+        elif bank_option == "MCB Early Redemption":
+            process_mcb_early_redemption(uploaded_file, col2)
+        else:
+            # Custom form processing
+            if "custom_response" not in st.session_state:
+                with st.spinner("Extracting data from custom form..."):
+                    response = call_openai_api_with_image(uploaded_file)
+                    st.session_state.custom_response = response
+            
             with col2:
                 st.subheader("Extracted Data from Custom Form")
-                st.write(custom_response)
+                st.write(st.session_state.custom_response)
 
-        # parsed_data = parse_account_opening_response(response)
-        # parsed_data2 = parse_account_info(response2)
-        # parsed_data3 = parse_special_instructions(response3)
-        # combined_data = {**parsed_data, **parsed_data2}
-        # Flatten the combined dictionary
-        # flat_data = flatten_dict(parsed_data)
-        # flat_data2 =flatten_dict(parsed_data2)
-        # flat_data3 = flatten_dict(parsed_data3)
-
-        # Create a DataFrame
-        # df = pd.DataFrame(list(flat_data.items()), columns=["Field", "Value"])
-        # df2 = pd.DataFrame(list(flat_data2.items()), columns=["Field", "Value"])
-        # df3 = pd.DataFrame(list(flat_data3.items()), columns=["Field", "Value"])
-
-        # Display in Streamlit
-        # st.dataframe(df)
-        # st.dataframe(df2)
-        # st.dataframe(df3)
-
-        # with st.spinner("Processing image..."):
-        #     segments = segment_image(image_pil)
-            # pdf_paths = apply_ocr_and_generate_pdfs(segments)
-            # print("Generated PDF paths:", pdf_paths)
-
-        # all_data = {}
-        # for idx, seg_path in enumerate(segments, start=1):
-        #     data = call_gpt_vision(seg_path, idx, OPENAI_API_KEY)
-
-        #     if "error" in data:
-        #         st.error(data["error"])
-        #         st.text(data["raw"])
-        #     else:
-        #         all_data.update(data)
-
-        # st.success("✅ Bank Form Processed.")
-        # flat_data = flatten_dict(all_data)
-        # df = pd.DataFrame(list(flat_data.items()), columns=["Field", "Value"])
-        # st.dataframe(df, use_container_width=True)
-
-    # elif uploaded_file:
-    #     st.warning("Please enter your credentials.")
-
-    #st.button("Logout", on_click=lambda: st.session_state.update(logged_in=False))
-# ---------- LAYOUT ----------
 else:
+    # Login page
     col1, col2 = st.columns([1.5, 1])
 
     with col1:
-        img_path = Path(dashboard_preview)  # keep your existing variable name
+        img_path = Path(dashboard_preview)
         if img_path.exists():
             img_bytes = img_path.read_bytes()
             mime = "image/png" if img_path.suffix.lower() == ".png" else "image/jpeg"
@@ -828,8 +2116,7 @@ else:
         st.markdown(html, unsafe_allow_html=True)
 
     with col2:
-        st.markdown("<div class='login-card'>", unsafe_allow_html=True)
-        st.image(logo_path, width=150)
+        st.image("OfficeFlow Ai-01-01.png", width=250)
         st.markdown("<h2>Officeflow AI</h2>", unsafe_allow_html=True)
         
         st.subheader("Login")
@@ -843,7 +2130,7 @@ else:
         if login:
             if email == "admin@officeflowai.com" and password == "12345":
                 st.session_state.logged_in = True
-                st.rerun()  # reloads the app to show welcome screen
+                st.rerun()
             else:
                 st.error("Invalid credentials. Please try again.")
         
