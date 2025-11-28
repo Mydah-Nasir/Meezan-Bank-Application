@@ -1513,7 +1513,7 @@ def process_mcb_form(uploaded_file, col2):
     - Investor Registration Number (for official use only)
 
     SECTION 1: PRINCIPAL APPLICANT'S DETAILS:
-    - PRINCIPAL APPLICANT'S NAME (as per CNIC/NICOP/PASSPORT No./B-Form No.)
+    - PRINCIPAL APPLICANT'S NAME (as per CNIC/NICOP/Passport No./B-Form No.)
     - FATHER/SPOUSE NAME (as per identity document)
     - CNIC/NICOP/PASSPORT No./B-FORM NO.
     - MOTHER MAIDEN NAME
@@ -2051,7 +2051,7 @@ if st.session_state.logged_in:
             # Clear previous responses when file changes
             for key in ["meezan_response1", "meezan_response2", "meezan_response3", 
                        "mcb_response", "allied_response", "alfalah_response", 
-                       "askari_response", "mcb_redemption_general_response", "mcb_early_redemption_response","custom_response"]:
+                       "askari_response", "mcb_redemption_c1_response", "mcb_early_redemption_response", "custom_response"]:
                 if key in st.session_state:
                     del st.session_state[key]
         
