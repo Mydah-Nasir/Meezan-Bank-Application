@@ -25,7 +25,37 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.lib.styles import ParagraphStyle
 import hashlib
 import requests
+import pytesseract
+from pytesseract import Output
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
+def find_heading_y(image_gray, heading_text):
+    ocr_data = pytesseract.image_to_data(image_gray, output_type=Output.DICT)
+    for i, word in enumerate(ocr_data['text']):
+        if heading_text.lower() in word.lower():
+            return ocr_data['top'][i]
+    return None
+def segment_image(image_pil):
+    image_cv = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2GRAY)
+    width, height = image_pil.size
+
+    y_contact = find_heading_y(image_cv, "CONTACT DETAILS") or int(height * 0.4)
+    y_special = find_heading_y(image_cv, "SPECIAL INSTRUCTIONS") or int(height * 0.65)
+
+    boxes = [
+        (0, 0, width, y_contact),
+        (0, y_contact, width, y_special),
+        (0, y_special, width, height)
+    ]
+
+    segment_paths = []
+    for i, box in enumerate(boxes, 1):
+        segment = image_pil.crop(box)
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+        segment.save(temp_file.name)
+        segment_paths.append(temp_file.name)
+
+    return segment_paths
 # Try to import PDF libraries
 try:
     import pypdfium2 as pdfium
@@ -1400,6 +1430,8 @@ def save_askari_to_pdf(form_data):
 # ---------- Bank Processing Functions ----------
 def process_meezan_form(uploaded_file, col2):
     """Process Meezan Bank form"""
+    segments = segment_image(Image.open(uploaded_file))   # returns 3 image paths
+    seg1, seg2, seg3 = segments[0], segments[1], segments[2]
     meezan_prompt1 = """Extract the following details from the form in a structured and complete manner: * Date: [Your answer here] * Day: [Your answer here] * Month: [Your answer here] * Year: [Your answer here] * Type of Account: [Your answer here] * Principal Account Holder: * Name: [Your answer here] * Father/Husband Name: [Your answer here] * Mother Maiden Name: [Your answer here] * CNIC/NICOP/Passport No: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Date of Birth: [Your answer here] * Marital Status: [Your answer here] * Religion: [Your answer here] * Place of Birth: [Your answer here] * Nationality: [Your answer here] * Dual Nationality: [Your answer here] * Mailing Address: * Street: [Your answer here] * City: [Your answer here] * Country: [Your answer here] * Current Address: * Street: [Your answer here] * City: [Your answer here] * Country: [Your answer here] Leave any field blank if the information is missing or not available."""
     
     meezan_prompt2 = "Extract the following details from the form in a structured and complete manner: * Residential Status: [Your answer here] * Email: [Your answer here] * Mobile Network: [Your answer here] * Tel/Res Office: [Your answer here] * Mobile: [Your answer here] * In Case of Minor Account: * Name of Guardian: [Your answer here] * Relation with Principal: [Your answer here] * Guardian CNIC: [Your answer here] * CNIC Expiry Date: [Your answer here] * Bank Account Detail: * Bank Account No.: [Your answer here] * Bank: [Your answer here] * Branch: [Your answer here] * City: [Your answer here] * Joint Account Holders: * Joint Holder 1: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Joint Holder 2: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here]Leave blank if missing"
@@ -1424,17 +1456,17 @@ def process_meezan_form(uploaded_file, col2):
     # Process Meezan form with three prompts
     if "meezan_response1" not in st.session_state:
         with st.spinner("Extracting principal account holder details..."):
-            response1 = call_openai_api_with_image(uploaded_file, meezan_prompt1)
+            response1 = call_openai_api_with_image(open(seg1, "rb"), meezan_prompt1)
             st.session_state.meezan_response1 = response1
     
     if "meezan_response2" not in st.session_state:
         with st.spinner("Extracting contact and joint holder details..."):
-            response2 = call_openai_api_with_image(uploaded_file, meezan_prompt2)
+            response2 = call_openai_api_with_image(open(seg2, "rb"), meezan_prompt2)
             st.session_state.meezan_response2 = response2
     
     if "meezan_response3" not in st.session_state:
         with st.spinner("Extracting special instructions..."):
-            response3 = call_openai_api_with_image(uploaded_file, meezan_prompt3)
+            response3 = call_openai_api_with_image(open(seg3, "rb"), meezan_prompt3)
             st.session_state.meezan_response3 = response3
     
     if all(key in st.session_state for key in ["meezan_response1", "meezan_response2", "meezan_response3"]):
