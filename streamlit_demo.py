@@ -265,6 +265,76 @@ def call_openai_api_with_image(image_file, prompt=None, model="gpt-4o"):
         st.error(f"Error using OpenAI GPT-4o API: {str(e)}")
         return None
 
+def call_qwen_model_with_image(image_file, prompt=None, model="Qwen/Qwen2.5-VL-7B-Instruct:hyperbolic"):
+    """Call OpenAI Qwen with Streamlit-uploaded image/PDF and text prompt."""
+    try:
+        client = OpenAI( base_url="https://router.huggingface.co/v1",api_key=st.secrets["HF_TOKEN"],)
+
+        default_prompt = (
+            "You are an expert in OCR and document analysis. "
+            "Carefully review the uploaded image and extract all visible information from it. "
+            "Present the extracted content in a clear and structured format using readable sections and bullet points. "
+            "Include key details such as document title, headers, names, dates, addresses, reference numbers, "
+            "amounts, item descriptions, totals, and any tabular or listed data. "
+            "If some information is unclear or partially visible, indicate it as '(unclear)'. "
+            "Avoid adding extra commentary or assumptions — only include what is visible in the document."
+        )
+
+        effective_prompt = prompt.strip() if prompt else default_prompt
+
+        # Check if the file is a PDF
+        if hasattr(image_file, 'type') and image_file.type == "application/pdf":
+            if not PDF_SUPPORT:
+                st.error("PDF processing is not available. Please install pypdfium2.")
+                return None
+                
+            # Convert PDF to images and use the first page
+            pdf_images = convert_pdf_to_images(image_file)
+            if pdf_images and len(pdf_images) > 0:
+                image = pdf_images[0]  # Use first page
+                st.info(f"📄 PDF detected. Processing first page of {len(pdf_images)} pages.")
+            else:
+                st.error("Failed to convert PDF to images.")
+                return None
+        else:
+            # It's an image file
+            image = Image.open(image_file)
+        
+        # Convert to RGB if necessary and prepare for API
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+            
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG", quality=95)
+        image_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": effective_prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_base64}"
+                        },
+                    },
+                ],
+            }
+        ]
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+        )
+
+        reply = response.choices[0].message.content
+        return reply
+
+    except Exception as e:
+        st.error(f"Error using OpenAI GPT-4o API: {str(e)}")
+        return None
+
 def extract_value(text, field):
     if not isinstance(text, str):
         return None
@@ -1456,17 +1526,20 @@ def process_meezan_form(uploaded_file, col2):
     # Process Meezan form with three prompts
     if "meezan_response1" not in st.session_state:
         with st.spinner("Extracting principal account holder details..."):
-            response1 = call_openai_api_with_image(open(seg1, "rb"), meezan_prompt1)
+            # response1 = call_openai_api_with_image(open(seg1, "rb"), meezan_prompt1)
+            response1 = call_qwen_model_with_image(uploaded_file, meezan_prompt1)
             st.session_state.meezan_response1 = response1
     
     if "meezan_response2" not in st.session_state:
         with st.spinner("Extracting contact and joint holder details..."):
             response2 = call_openai_api_with_image(open(seg2, "rb"), meezan_prompt2)
+            # response2 = call_qwen_model_with_image(uploaded_file, meezan_prompt2)
             st.session_state.meezan_response2 = response2
     
     if "meezan_response3" not in st.session_state:
         with st.spinner("Extracting special instructions..."):
             response3 = call_openai_api_with_image(open(seg3, "rb"), meezan_prompt3)
+            # response3 = call_qwen_model_with_image(uploaded_file, meezan_prompt3)
             st.session_state.meezan_response3 = response3
     
     if all(key in st.session_state for key in ["meezan_response1", "meezan_response2", "meezan_response3"]):
