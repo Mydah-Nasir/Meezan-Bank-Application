@@ -25,16 +25,63 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.lib.styles import ParagraphStyle
 import hashlib
 import requests
-import pytesseract
-from pytesseract import Output
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
-def find_heading_y(image_gray, heading_text):
-    ocr_data = pytesseract.image_to_data(image_gray, output_type=Output.DICT)
-    for i, word in enumerate(ocr_data['text']):
-        if heading_text.lower() in word.lower():
-            return ocr_data['top'][i]
+# import pytesseract
+# from pytesseract import Output
+# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+from google.cloud import vision
+import os
+
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "alrashed-33a11551f837.json"
+vision_client = vision.ImageAnnotatorClient()
+
+def find_heading_y(image_input, heading_text: str):
+    """
+    Detects the top Y coordinate of a heading using Google Cloud Vision OCR.
+    Accepts either:
+        - PIL Image
+        - NumPy array (OpenCV)
+    Returns: int Y-coordinate or None.
+    """
+
+    # ---------- HANDLE PIL OR NUMPY ----------
+    if isinstance(image_input, np.ndarray):  
+        # Convert NumPy → PIL
+        image_pil = Image.fromarray(image_input)
+    else:
+        image_pil = image_input  # already PIL
+
+    # ---------- PIL → JPEG bytes ----------
+    img_bytes = io.BytesIO()
+    image_pil.save(img_bytes, format="JPEG")
+    content = img_bytes.getvalue()
+
+    # ---------- Google Vision detection ----------
+    image = vision.Image(content=content)
+    response = vision_client.document_text_detection(image=image)
+
+    if response.error.message:
+        raise Exception(response.error.message)
+
+    # ---------- Search each word for heading ----------
+    for page in response.full_text_annotation.pages:
+        for block in page.blocks:
+            for paragraph in block.paragraphs:
+                for word in paragraph.words:
+                    text = "".join([symbol.text for symbol in word.symbols])
+
+                    if heading_text.lower() in text.lower():
+                        ys = [v.y for v in word.bounding_box.vertices]
+                        return min(ys)
+
     return None
+
+
+# def find_heading_y(image_gray, heading_text):
+#     ocr_data = pytesseract.image_to_data(image_gray, output_type=Output.DICT)
+#     for i, word in enumerate(ocr_data['text']):
+#         if heading_text.lower() in word.lower():
+#             return ocr_data['top'][i]
 def segment_image(image_pil):
     image_cv = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2GRAY)
     width, height = image_pil.size
@@ -1526,20 +1573,27 @@ def process_meezan_form(uploaded_file, col2):
     # Process Meezan form with three prompts
     if "meezan_response1" not in st.session_state:
         with st.spinner("Extracting principal account holder details..."):
-            # response1 = call_openai_api_with_image(open(seg1, "rb"), meezan_prompt1)
-            response1 = call_qwen_model_with_image(uploaded_file, meezan_prompt1)
+            #response1 = call_openai_api_with_image(open(seg1, "rb"), meezan_prompt1)
+            response1 = call_qwen_model_with_image(open(seg1, "rb"), meezan_prompt1)
+            print(response1)
+            st.write(response1)
             st.session_state.meezan_response1 = response1
     
     if "meezan_response2" not in st.session_state:
         with st.spinner("Extracting contact and joint holder details..."):
-            response2 = call_openai_api_with_image(open(seg2, "rb"), meezan_prompt2)
-            # response2 = call_qwen_model_with_image(uploaded_file, meezan_prompt2)
+            #response2 = call_openai_api_with_image(open(seg2, "rb"), meezan_prompt2)
+            response2 = call_qwen_model_with_image(open(seg2, "rb"), meezan_prompt2)
+            print(response2)
+            st.write(response2)
             st.session_state.meezan_response2 = response2
     
     if "meezan_response3" not in st.session_state:
         with st.spinner("Extracting special instructions..."):
             response3 = call_openai_api_with_image(open(seg3, "rb"), meezan_prompt3)
             # response3 = call_qwen_model_with_image(uploaded_file, meezan_prompt3)
+            response3 = call_qwen_model_with_image(open(seg3, "rb"), meezan_prompt3)
+            print(response3)
+            st.write(response3)
             st.session_state.meezan_response3 = response3
     
     if all(key in st.session_state for key in ["meezan_response1", "meezan_response2", "meezan_response3"]):
