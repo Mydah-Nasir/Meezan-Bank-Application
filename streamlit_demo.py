@@ -679,7 +679,7 @@ def process_mcb_early_redemption(uploaded_file, col2):
     response_key = "mcb_early_redemption_response"
     if response_key not in st.session_state:
         with st.spinner("Extracting data from MCB Early Redemption Form..."):
-            response = call_openai_api_with_image(uploaded_file, mcb_early_redemption_prompt)
+            response = call_qwen_model_with_image(uploaded_file, mcb_early_redemption_prompt)
             st.session_state[response_key] = response
     
     if response_key in st.session_state:
@@ -901,7 +901,7 @@ def process_mcb_redemption_c1(uploaded_file, col2):
     response_key = "mcb_redemption_c1_response"
     if response_key not in st.session_state:
         with st.spinner("Extracting data from MCB Redemption Form C-1..."):
-            response = call_openai_api_with_image(uploaded_file, mcb_redemption_prompt)
+            response = call_qwen_model_with_image(uploaded_file, mcb_redemption_prompt)
             st.session_state[response_key] = response
     
     if response_key in st.session_state:
