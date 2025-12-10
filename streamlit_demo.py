@@ -32,8 +32,8 @@ pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tessera
 from google.cloud import vision
 import os
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "alrashed-33a11551f837.json"
-vision_client = vision.ImageAnnotatorClient()
+# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "alrashed-33a11551f837.json"
+# vision_client = vision.ImageAnnotatorClient()
 
 def find_heading_y(image_input, heading_text: str):
     """
@@ -1549,8 +1549,8 @@ def save_askari_to_pdf(form_data):
 # ---------- Bank Processing Functions ----------
 def process_meezan_form(uploaded_file, col2):
     """Process Meezan Bank form"""
-    segments = segment_image(Image.open(uploaded_file))   # returns 3 image paths
-    seg1, seg2, seg3 = segments[0], segments[1], segments[2]
+    # segments = segment_image(Image.open(uploaded_file))   # returns 3 image paths
+    # seg1, seg2, seg3 = segments[0], segments[1], segments[2]
     meezan_prompt1 = """Extract the following details from the form in a structured and complete manner and keep field names exact as follows: * Date: [Your answer here] * Day: [Your answer here] * Month: [Your answer here] * Year: [Your answer here] * Type of Account: [Your answer here] * Principal Account Holder: * Name: [Your answer here] * Father's/Husband Name: [Your answer here] * Mother's Maiden Name: [Your answer here] * CNIC/NICOP/Passport No: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Date of Birth: [Your answer here] * Marital Status: [Single/Married] * Religion: [Muslim/Non-Muslim] * Place of Birth: [Your answer here] * Nationality: [Your answer here] * Dual Nationality: [Yes/No] * Mailing Address: * Street: [Your answer here] * City: [Your answer here] * Country: [Your answer here] * Current Address: * Street: [Your answer here] * City: [Your answer here] * Country: [Your answer here] Leave any field blank if the information is missing or not available."""
     
     meezan_prompt2 = "Extract the following details from the form in a structured and complete manner: * Residential Status: [Your answer here] * Email: [Your answer here] * Mobile Network: [Your answer here] * Tel/Res Office: [Your answer here] * Mobile: [Your answer here] * In Case of Minor Account: * Name of Guardian: [Your answer here] * Relation with Principal: [Your answer here] * Guardian CNIC: [Your answer here] * CNIC Expiry Date: [Your answer here] * Bank Account Detail: * Bank Account No.: [Your answer here] * Bank: [Your answer here] * Branch: [Your answer here] * City: [Your answer here] * Joint Account Holders: * Joint Holder 1: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Joint Holder 2: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here]Leave blank if missing"
