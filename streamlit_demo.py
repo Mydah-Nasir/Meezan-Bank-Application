@@ -25,9 +25,9 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.lib.styles import ParagraphStyle
 import hashlib
 import requests
-import pytesseract
-from pytesseract import Output
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# import pytesseract
+# from pytesseract import Output
+# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 from google.cloud import vision
 import os
