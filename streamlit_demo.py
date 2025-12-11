@@ -75,6 +75,13 @@ def find_heading_y(image_input, heading_text: str):
                         return min(ys)
 
     return None
+
+
+# def find_heading_y(image_gray, heading_text):
+#     ocr_data = pytesseract.image_to_data(image_gray, output_type=Output.DICT)
+#     for i, word in enumerate(ocr_data['text']):
+#         if heading_text.lower() in word.lower():
+#             return ocr_data['top'][i]
 def segment_image(image_pil):
     image_cv = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2GRAY)
     width, height = image_pil.size
@@ -1592,6 +1599,11 @@ def process_meezan_form(uploaded_file, col2):
             # response3 = call_openai_api_with_image(open(seg3, "rb"), meezan_prompt3)
             # response3 = call_openai_api_with_image(uploaded_file, meezan_prompt3)
             response3 = call_qwen_model_with_image(open(seg3, "rb"), meezan_prompt3)
+            response3 = call_openai_api_with_image(open(seg3, "rb"), meezan_prompt3)
+            # response3 = call_qwen_model_with_image(uploaded_file, meezan_prompt3)
+            response3 = call_qwen_model_with_image(open(seg3, "rb"), meezan_prompt3)
+            print(response3)
+            st.write(response3)
             st.session_state.meezan_response3 = response3
     
     if all(key in st.session_state for key in ["meezan_response1", "meezan_response2", "meezan_response3"]):
