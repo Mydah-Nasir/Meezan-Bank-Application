@@ -25,15 +25,15 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.lib.styles import ParagraphStyle
 import hashlib
 import requests
-
 # import pytesseract
 # from pytesseract import Output
 # pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
 from google.cloud import vision
 import os
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "alrashed-33a11551f837.json"
-vision_client = vision.ImageAnnotatorClient()
+# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "alrashed-33a11551f837.json"
+# vision_client = vision.ImageAnnotatorClient()
 
 def find_heading_y(image_input, heading_text: str):
     """
@@ -389,6 +389,7 @@ def extract_value(text, field):
         return None
     patterns = [
         rf"\*\*{re.escape(field)}:\*\* (.+?)(\n|$)",
+        rf"\*\s*\*\*\s*{re.escape(field)}\s*:\s*\*\*\s*([^\*\n\r]+)",
         rf"{re.escape(field)}: (.+?)(\n|$)",
         rf"{re.escape(field)}\s*-\s*(.+?)(\n|$)"
     ]
@@ -685,7 +686,7 @@ def process_mcb_early_redemption(uploaded_file, col2):
     response_key = "mcb_early_redemption_response"
     if response_key not in st.session_state:
         with st.spinner("Extracting data from MCB Early Redemption Form..."):
-            response = call_openai_api_with_image(uploaded_file, mcb_early_redemption_prompt)
+            response = call_qwen_model_with_image(uploaded_file, mcb_early_redemption_prompt)
             st.session_state[response_key] = response
     
     if response_key in st.session_state:
@@ -907,7 +908,7 @@ def process_mcb_redemption_c1(uploaded_file, col2):
     response_key = "mcb_redemption_c1_response"
     if response_key not in st.session_state:
         with st.spinner("Extracting data from MCB Redemption Form C-1..."):
-            response = call_openai_api_with_image(uploaded_file, mcb_redemption_prompt)
+            response = call_qwen_model_with_image(uploaded_file, mcb_redemption_prompt)
             st.session_state[response_key] = response
     
     if response_key in st.session_state:
@@ -965,7 +966,7 @@ def parse_meezan_account_opening_response(response_text: str) -> dict:
     
     # Principal Account Holder Information
     principal_fields = [
-        "Name", "Father/Husband Name", "Mother Maiden Name", 
+        "Name", "Father's/Husband Name", "Mother's Maiden Name", 
         "CNIC/NICOP/Passport No", "Issuance Date", "Expiry Date",
         "Date of Birth", "Marital Status", "Religion", "Place of Birth",
         "Nationality", "Dual Nationality"
@@ -1059,30 +1060,36 @@ def parse_meezan_special_instructions(response_text: str) -> dict:
     return data
 
 def extract_meezan_joint_holders(response_text: str) -> dict:
-    """Extract joint holder information for Meezan Bank"""
     joint_data = {}
-    
-    # Look for joint holder sections
-    for i in range(1, 3):  # Assuming max 2 joint holders
+
+    for i in range(1, 3):
+        # Extract the section for Joint Holder i
+        pattern = rf"Joint Holder {i}[:\s\*]*([\s\S]*?)(?=Joint Holder {i+1}|$)"
+        match = re.search(pattern, response_text, re.IGNORECASE)
+
+        if not match:
+            continue
+
+        section = match.group(1)
         holder_data = {}
+
         fields = [
-            f"Relation with Principal",
-            f"Customer ID",
-            f"Name",
-            f"CNIC/NICOP/Passport",
-            f"Issuance Date",
-            f"Expiry Date"
+            "Relation with Principal",
+            "Customer ID",
+            "Name",
+            "CNIC/NICOP/Passport",
+            "Issuance Date",
+            "Expiry Date"
         ]
-        
+
         for field in fields:
-            full_field = f"Joint Holder {i}: {field}"
-            value = extract_value(response_text, full_field)
-            if value:
+            value = extract_value(section, field)   # <-- search inside section only
+            if value is not None:
                 holder_data[field] = value
-        
+
         if holder_data:
             joint_data[f"Joint Holder {i}"] = holder_data
-    
+
     return joint_data if joint_data else None
 
 def save_meezan_to_pdf(data_dict1, data_dict2, data_dict3):
@@ -1549,9 +1556,9 @@ def save_askari_to_pdf(form_data):
 # ---------- Bank Processing Functions ----------
 def process_meezan_form(uploaded_file, col2):
     """Process Meezan Bank form"""
-    segments = segment_image(Image.open(uploaded_file))   # returns 3 image paths
-    seg1, seg2, seg3 = segments[0], segments[1], segments[2]
-    meezan_prompt1 = """Extract the following details from the form in a structured and complete manner: * Date: [Your answer here] * Day: [Your answer here] * Month: [Your answer here] * Year: [Your answer here] * Type of Account: [Your answer here] * Principal Account Holder: * Name: [Your answer here] * Father/Husband Name: [Your answer here] * Mother Maiden Name: [Your answer here] * CNIC/NICOP/Passport No: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Date of Birth: [Your answer here] * Marital Status: [Single/Married] * Religion: [Muslim/Non-Muslim] * Place of Birth: [Your answer here] * Nationality: [Your answer here] * Dual Nationality: [Yes/No] * Mailing Address: * Street: [Your answer here] * City: [Your answer here] * Country: [Your answer here] * Current Address: * Street: [Your answer here] * City: [Your answer here] * Country: [Your answer here] Leave any field blank if the information is missing or not available."""
+    # segments = segment_image(Image.open(uploaded_file))   # returns 3 image paths
+    # seg1, seg2, seg3 = segments[0], segments[1], segments[2]
+    meezan_prompt1 = """Extract the following details from the form in a structured and complete manner and keep field names exact as follows: * Date: [Your answer here] * Day: [Your answer here] * Month: [Your answer here] * Year: [Your answer here] * Type of Account: [Your answer here] * Principal Account Holder: * Name: [Your answer here] * Father's/Husband Name: [Your answer here] * Mother's Maiden Name: [Your answer here] * CNIC/NICOP/Passport No: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Date of Birth: [Your answer here] * Marital Status: [Single/Married] * Religion: [Muslim/Non-Muslim] * Place of Birth: [Your answer here] * Nationality: [Your answer here] * Dual Nationality: [Yes/No] * Mailing Address: * Street: [Your answer here] * City: [Your answer here] * Country: [Your answer here] * Current Address: * Street: [Your answer here] * City: [Your answer here] * Country: [Your answer here] Leave any field blank if the information is missing or not available."""
     
     meezan_prompt2 = "Extract the following details from the form in a structured and complete manner: * Residential Status: [Your answer here] * Email: [Your answer here] * Mobile Network: [Your answer here] * Tel/Res Office: [Your answer here] * Mobile: [Your answer here] * In Case of Minor Account: * Name of Guardian: [Your answer here] * Relation with Principal: [Your answer here] * Guardian CNIC: [Your answer here] * CNIC Expiry Date: [Your answer here] * Bank Account Detail: * Bank Account No.: [Your answer here] * Bank: [Your answer here] * Branch: [Your answer here] * City: [Your answer here] * Joint Account Holders: * Joint Holder 1: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here] * Joint Holder 2: * Name: [Your answer here] * Relation with Principal: [Your answer here] * Customer ID: [Your answer here] * CNIC/NICOP/Passport: [Your answer here] * Issuance Date: [Your answer here] * Expiry Date: [Your answer here]Leave blank if missing"
     
