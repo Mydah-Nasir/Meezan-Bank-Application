@@ -1588,18 +1588,21 @@ def process_meezan_form(uploaded_file, col2):
         with st.spinner("Extracting principal account holder details..."):
             response1 = call_openai_api_with_image(open(seg1, "rb"), meezan_prompt1)
             # response1 = call_openai_api_with_image(uploaded_file, meezan_prompt1)
-            #response1 = call_qwen_model_with_image(uploaded_file, meezan_prompt1)
+            response1 = call_qwen_model_with_image(open(seg1, "rb"), meezan_prompt1)
             st.session_state.meezan_response1 = response1
     
     if "meezan_response2" not in st.session_state:
         with st.spinner("Extracting contact and joint holder details..."):
             response2 = call_openai_api_with_image(open(seg2, "rb"), meezan_prompt2)
             # response2 = call_openai_api_with_image(uploaded_file, meezan_prompt2)
-            #response2 = call_qwen_model_with_image(uploaded_file, meezan_prompt2)
+            response2 = call_qwen_model_with_image(open(seg2, "rb"), meezan_prompt2)
             st.session_state.meezan_response2 = response2
     
     if "meezan_response3" not in st.session_state:
         with st.spinner("Extracting special instructions..."):
+            # response3 = call_openai_api_with_image(open(seg3, "rb"), meezan_prompt3)
+            # response3 = call_openai_api_with_image(uploaded_file, meezan_prompt3)
+            response3 = call_qwen_model_with_image(open(seg3, "rb"), meezan_prompt3)
             response3 = call_openai_api_with_image(open(seg3, "rb"), meezan_prompt3)
             # response3 = call_openai_api_with_image(uploaded_file, meezan_prompt3)
             # response3 = call_qwen_model_with_image(uploaded_file, meezan_prompt3)
