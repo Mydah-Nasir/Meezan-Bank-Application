@@ -2041,7 +2041,7 @@ def process_askari_form(uploaded_file, col2):
     response_key = "askari_response"
     if response_key not in st.session_state:
         with st.spinner("Extracting data from Askari Bank form..."):
-            response = call_openai_api_with_image(uploaded_file, askari_prompt)
+            response = call_qwen_model_with_image(uploaded_file, askari_prompt)
             st.session_state[response_key] = response
     
     if response_key in st.session_state:
