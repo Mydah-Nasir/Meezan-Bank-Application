@@ -1587,8 +1587,8 @@ def process_meezan_form(uploaded_file, col2):
     if "meezan_response1" not in st.session_state:
         with st.spinner("Extracting principal account holder details..."):
             #response1 = call_openai_api_with_image(open(seg1, "rb"), meezan_prompt1)
-            #response1 = call_openai_api_with_image(uploaded_file, meezan_prompt1)
-            response1 = call_qwen_model_with_image(uploaded_file, meezan_prompt1)
+            response1 = call_openai_api_with_image(uploaded_file, meezan_prompt1)
+            #response1 = call_qwen_model_with_image(uploaded_file, meezan_prompt1)
             st.session_state.meezan_response1 = response1
     
     if "meezan_response2" not in st.session_state:
@@ -1604,8 +1604,8 @@ def process_meezan_form(uploaded_file, col2):
             #response3 = call_openai_api_with_image(uploaded_file, meezan_prompt3)
             #response3 = call_qwen_model_with_image(open(seg3, "rb"), meezan_prompt3)
             #response3 = call_openai_api_with_image(open(seg3, "rb"), meezan_prompt3)
-            # response3 = call_openai_api_with_image(uploaded_file, meezan_prompt3)
-            response3 = call_qwen_model_with_image(uploaded_file, meezan_prompt3)
+            response3 = call_openai_api_with_image(uploaded_file, meezan_prompt3)
+            #response3 = call_qwen_model_with_image(uploaded_file, meezan_prompt3)
             # response3 = call_openai_api_with_image(open(seg3, "rb"), meezan_prompt3)
             #response3 = call_qwen_model_with_image(uploaded_file, meezan_prompt3)
             #response3 = call_qwen_model_with_image(open(seg3, "rb"), meezan_prompt3)
@@ -2041,7 +2041,7 @@ def process_askari_form(uploaded_file, col2):
     response_key = "askari_response"
     if response_key not in st.session_state:
         with st.spinner("Extracting data from Askari Bank form..."):
-            response = call_qwen_model_with_image(uploaded_file, askari_prompt)
+            response = call_openai_api_with_image(uploaded_file, askari_prompt)
             st.session_state[response_key] = response
     
     if response_key in st.session_state:
