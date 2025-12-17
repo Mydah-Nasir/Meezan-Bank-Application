@@ -2633,7 +2633,7 @@ def identify_form_on_page(image, form_prompts, page_num):
         Respond with ONLY the form number (1, 2, or 3). If none match, respond with "0".
         """
         
-        response = call_qwen_api_with_image_single(image, id_prompt, page_num)
+        response = call_openai_api_with_image_single(image, id_prompt, page_num)
         
         if response:
             response = response.strip()
@@ -2667,7 +2667,7 @@ def extract_form_data(image, prompt, page_num):
         5. No explanations, no extra text
         """
         
-        return call_qwen_api_with_image_single(image, strict_prompt, page_num)
+        return call_openai_api_with_image_single(image, strict_prompt, page_num)
         
     except Exception as e:
         st.error(f"Error extracting form data from page {page_num}: {str(e)}")
