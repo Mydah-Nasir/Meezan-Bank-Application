@@ -1586,26 +1586,26 @@ def process_meezan_form(uploaded_file, col2):
     # Process Meezan form with three prompts
     if "meezan_response1" not in st.session_state:
         with st.spinner("Extracting principal account holder details..."):
-            response1 = call_openai_api_with_image(open(seg1, "rb"), meezan_prompt1)
-            # response1 = call_openai_api_with_image(uploaded_file, meezan_prompt1)
-            response1 = call_qwen_model_with_image(open(seg1, "rb"), meezan_prompt1)
+            #response1 = call_openai_api_with_image(open(seg1, "rb"), meezan_prompt1)
+            #response1 = call_openai_api_with_image(uploaded_file, meezan_prompt1)
+            response1 = call_qwen_model_with_image(uploaded_file, meezan_prompt1)
             st.session_state.meezan_response1 = response1
     
     if "meezan_response2" not in st.session_state:
         with st.spinner("Extracting contact and joint holder details..."):
             response2 = call_openai_api_with_image(open(seg2, "rb"), meezan_prompt2)
-            # response2 = call_openai_api_with_image(uploaded_file, meezan_prompt2)
-            response2 = call_qwen_model_with_image(open(seg2, "rb"), meezan_prompt2)
+            #response2 = call_openai_api_with_image(uploaded_file, meezan_prompt2)
+            #response2 = call_qwen_model_with_image(uploaded_file, meezan_prompt2)
             st.session_state.meezan_response2 = response2
     
     if "meezan_response3" not in st.session_state:
         with st.spinner("Extracting special instructions..."):
-            # response3 = call_openai_api_with_image(open(seg3, "rb"), meezan_prompt3)
+            #response3 = call_openai_api_with_image(open(seg3, "rb"), meezan_prompt3)
+            #response3 = call_openai_api_with_image(uploaded_file, meezan_prompt3)
+            #response3 = call_qwen_model_with_image(open(seg3, "rb"), meezan_prompt3)
+            #response3 = call_openai_api_with_image(open(seg3, "rb"), meezan_prompt3)
             # response3 = call_openai_api_with_image(uploaded_file, meezan_prompt3)
-            response3 = call_qwen_model_with_image(open(seg3, "rb"), meezan_prompt3)
-            response3 = call_openai_api_with_image(open(seg3, "rb"), meezan_prompt3)
-            # response3 = call_openai_api_with_image(uploaded_file, meezan_prompt3)
-            # response3 = call_qwen_model_with_image(uploaded_file, meezan_prompt3)
+            response3 = call_qwen_model_with_image(uploaded_file, meezan_prompt3)
             # response3 = call_openai_api_with_image(open(seg3, "rb"), meezan_prompt3)
             #response3 = call_qwen_model_with_image(uploaded_file, meezan_prompt3)
             #response3 = call_qwen_model_with_image(open(seg3, "rb"), meezan_prompt3)
@@ -2097,6 +2097,1467 @@ def process_askari_form(uploaded_file, col2):
                 )
                 st.success("Askari Bank Form data saved successfully!")
 
+# ---------- Al Meezan Package Specific Functions ----------
+def call_openai_api_with_image_single(image, prompt, page_num):
+    """Call OpenAI API with a single image"""
+    try:
+        client = OpenAI(api_key=api_key)
+        
+        # Convert PIL Image to base64
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG", quality=95)
+        image_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_base64}"
+                        },
+                    },
+                ],
+            }
+        ]
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+        )
+
+        return response.choices[0].message.content
+        
+    except Exception as e:
+        st.error(f"Error calling OpenAI API for page {page_num}: {str(e)}")
+        return None
+    
+def call_qwen_api_with_image_single(image, prompt, page_num,
+                                    model="Qwen/Qwen2.5-VL-7B-Instruct:hyperbolic"):
+    """Call Qwen Vision model with a single PIL image"""
+    try:
+        client = OpenAI(
+            base_url="https://router.huggingface.co/v1",
+            api_key=st.secrets["HF_TOKEN"],
+        )
+
+        # Ensure image is RGB
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+
+        # Convert PIL Image to base64
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG", quality=95)
+        image_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_base64}"
+                        },
+                    },
+                ],
+            }
+        ]
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+        )
+
+        return response.choices[0].message.content
+
+    except Exception as e:
+        st.error(f"Error calling Qwen API for page {page_num}: {str(e)}")
+        return None
+
+# Page number (1-based) → form key
+AL_MEEZAN_PAGE_FORM_MAP = {
+    1: "account_opening",
+    2: "account_opening",
+    3: "account_opening",
+    4: "fatca",
+    5: "crs",
+}
+
+def get_account_opening_prompt_by_page(page_num, base_prompt):
+    if page_num == 1:
+        return """
+        Extract ONLY the following sections from the INVESTOR ACCOUNT OPENING FORM:
+
+        SECTION 1: ACCOUNT INFORMATION
+            - Customer ID: 
+            - Portfolio No: 
+            - Date: 
+            - Day: 
+            - Month: 
+            - Year: 
+            - Type of Account: 
+            
+        SECTION 2: PERSONAL DETAILS
+        - Name: 
+        - Title (Mr./Mrs./Ms.): 
+        - Father's/Husband's Name: 
+        - Mother's Maiden Name: 
+        - CNIC/NICOP/Passport No: 
+        - Issuance Date: 
+        - Expiry Date: 
+        - Date of Birth: 
+        - Marital Status: 
+        - Religion: 
+        - Place of Birth: 
+        - Nationality: 
+        - Dual Nationality: 
+        
+        SECTION 3: ADDRESSES
+        - Mailing Address: 
+        - Mailing City: 
+        - Mailing Country: 
+        - Current Address: 
+        - Current City: 
+        - Current Country: 
+        
+        SECTION 4: CONTACT DETAILS
+        - Residential Status: 
+        - Email: 
+        - Mobile: 
+        - Mobile Network: 
+        - Tel/Res Office: 
+        
+        SECTION 5: BANK DETAILS
+        - Bank Account No: 
+        - Bank Name: 
+        - Branch: 
+        - City: 
+        
+        SECTION 6: SPECIAL INSTRUCTIONS
+        - Account Operating Instructions: 
+        - Dividend Mandate: 
+        - Communication Mode: 
+        - Stock Dividend: 
+
+        SECTION 7: DETAIL ABOUT MEEZAN TAHAFFUZ PENSION FUND (MTPF) ACCOUNT
+        - Expected Retirement Date (DD/MM/YYYY): 
+        - Note for Pension Fund investments over Rs. 3 million: 
+        
+        SECTION 8: ALLOCATION SCHEME SELECTION
+        - Selected Allocation Scheme: [Extract the checked option only]
+
+        IMPORTANT: Extract ALL fields exactly as they appear. For checkboxes, write the SELECTED option only.
+        Format: Field Name: Value
+        """
+
+    elif page_num == 2:
+        return """
+        Extract ONLY the following sections from the INVESTOR ACCOUNT OPENING FORM:
+
+        SECTION 9: SOURCE OF INCOME & WEALTH
+            - Source of Income: 
+            - Source of Wealth: 
+            - Name of Employer/Business (if Applicable): 
+            - Designation: 
+            - Nature of Business: 
+            
+        SECTION 10: EDUCATION & GEOGRAPHY
+        - Education: 
+        - Geographies involved: 
+        - Type of Counterparties: 
+            
+        SECTION 11: TRANSACTION DETAILS
+        - Possible Modes of Transactions: 
+        - Expected Turnover in Account: 
+        - Expected Amount of Investment: 
+        - Annual Income: 
+        - Expected No. of Transactions: 
+        
+        SECTION 12: RISK ASSESSMENT
+        - Age Group: 
+        - Risk-Return Tolerance: 
+        - Monthly Savings: 
+        - Occupation: 
+        
+        SECTION 13: INVESTMENT KNOWLEDGE
+        - Investment Knowledge Level: 
+        - Investment Objective: 
+        - Investment Horizon: 
+        
+        SECTION 14: INVESTOR PORTFOLIO CALCULATION
+        - Total Score: 
+        - Recommended Portfolio: 
+        - Calculated ideal Portfolio: 
+    
+        SECTION 15: NEXT OF KIN
+        - Next of Kin Name: 
+        - Next of Kin Contact: 
+        - Next of Kin Address: 
+        
+        SECTION 16: BENEFICIARY DETAILS
+        - Ultimate Beneficiary Name: 
+        - Relation with Customer: 
+        - Beneficiary CNIC/NICOP/Passport No: 
+
+        IMPORTANT: Extract ALL fields exactly as they appear. For checkboxes, write the SELECTED option only.
+        Format: Field Name: Value
+        """
+
+    elif page_num == 3:
+        return """
+        Extract ONLY the following sections from the INVESTOR ACCOUNT OPENING FORM:
+
+        SECTION 17: GUIDELINES FOR INVESTORS
+            - Guidelines Read and Understood: [Yes/No]
+            
+        SECTION 18: NOTE AND DECLARATION
+        - Declaration Signed: [Yes/No]
+        
+        SECTION 19: APPLICATION CHECKLIST
+        - CNIC Copy Attached: [Yes/No]
+        - Business/Employment Proof Attached: [Yes/No]
+        - Zakat Declaration Attached: [Yes/No]
+        - FATCA Form Attached: [Yes/No]
+        - CRS Form Attached: [Yes/No]
+        - Health Questionnaire Attached: [Yes/No]
+        
+        SECTION 20: SALES INFORMATION
+        - Sales Person's Name: 
+        - Manager's Name: 
+        - Distributor Stamp: [Present/Absent]
+        - DAO Code: 
+        - Remarks: 
+
+        IMPORTANT: Extract ALL fields exactly as they appear. For checkboxes, write the SELECTED option only.
+        Format: Field Name: Value
+        """
+
+    return base_prompt
+
+# ---------- Al Meezan Package Specific Functions ----------
+def process_al_meezan_package(uploaded_file, col2):
+    """Process Al Meezan Full Package with detailed extraction"""
+    st.markdown("## 🏦 Al Meezan - Forms Package")
+    st.info("Extracting 3 Forms from Package")
+    
+    # Convert PDF to images
+    with st.spinner("📄 Converting PDF to images..."):
+        pdf_images = convert_pdf_to_images(uploaded_file)
+        if not pdf_images:
+            st.error("❌ Failed to convert PDF")
+            return
+        
+        st.success(f"✅ Converted {len(pdf_images)} pages")
+    
+    # Define form-specific prompts (detailed prompts for each form)
+    form_prompts = {
+        "account_opening": {
+            "name": "Investor Account Opening Form for Individual",
+            "keywords": ["account opening", "customer id", "portfolio no", "cnic", "passport", "date of birth", "address"],
+            "prompt": """
+            Extract ALL information from the INVESTOR ACCOUNT OPENING FORM FOR INDIVIDUAL.
+            
+            SECTION 1: ACCOUNT INFORMATION
+            - Customer ID: 
+            - Portfolio No: 
+            - Date: 
+            - Day: 
+            - Month: 
+            - Year: 
+            - Type of Account: 
+            
+            SECTION 2: PERSONAL DETAILS
+            - Name: 
+            - Title (Mr./Mrs./Ms.): 
+            - Father's/Husband's Name: 
+            - Mother's Maiden Name: 
+            - CNIC/NICOP/Passport No: 
+            - Issuance Date: 
+            - Expiry Date: 
+            - Date of Birth: 
+            - Marital Status: 
+            - Religion: 
+            - Place of Birth: 
+            - Nationality: 
+            - Dual Nationality: 
+            
+            SECTION 3: ADDRESSES
+            - Mailing Address: 
+            - Mailing City: 
+            - Mailing Country: 
+            - Current Address: 
+            - Current City: 
+            - Current Country: 
+            
+            SECTION 4: CONTACT DETAILS
+            - Residential Status: 
+            - Email: 
+            - Mobile: 
+            - Mobile Network: 
+            - Tel/Res Office: 
+            
+            SECTION 5: BANK DETAILS
+            - Bank Account No: 
+            - Bank Name: 
+            - Branch: 
+            - City: 
+            
+            SECTION 6: SPECIAL INSTRUCTIONS
+            - Account Operating Instructions: 
+            - Dividend Mandate: 
+            - Communication Mode: 
+            - Stock Dividend: 
+
+            SECTION 7: DETAIL ABOUT MEEZAN TAHAFFUZ PENSION FUND (MTPF) ACCOUNT
+            - Expected Retirement Date (DD/MM/YYYY): 
+            - Note for Pension Fund investments over Rs. 3 million: 
+            
+            SECTION 8: ALLOCATION SCHEME SELECTION
+            - Selected Allocation Scheme: [Extract the checked option only]
+            
+            SECTION 9: SOURCE OF INCOME & WEALTH
+            - Source of Income: 
+            - Source of Wealth: 
+            - Name of Employer/Business (if Applicable): 
+            - Designation: 
+            - Nature of Business: 
+            
+            SECTION 10: EDUCATION & GEOGRAPHY
+            - Education: 
+            - Geographies involved: 
+            - Type of Counterparties: 
+            
+            SECTION 11: TRANSACTION DETAILS
+            - Possible Modes of Transactions: 
+            - Expected Turnover in Account: 
+            - Expected Amount of Investment: 
+            - Annual Income: 
+            - Expected No. of Transactions: 
+            
+            SECTION 12: RISK ASSESSMENT
+            - Age Group: 
+            - Risk-Return Tolerance: 
+            - Monthly Savings: 
+            - Occupation: 
+            
+            SECTION 13: INVESTMENT KNOWLEDGE
+            - Investment Knowledge Level: 
+            - Investment Objective: 
+            - Investment Horizon: 
+            
+            SECTION 14: INVESTOR PORTFOLIO CALCULATION
+            - Total Score: 
+            - Recommended Portfolio: 
+            - Calculated ideal Portfolio: 
+        
+            SECTION 15: NEXT OF KIN
+            - Next of Kin Name: 
+            - Next of Kin Contact: 
+            - Next of Kin Address: 
+            
+            SECTION 16: BENEFICIARY DETAILS
+            - Ultimate Beneficiary Name: 
+            - Relation with Customer: 
+            - Beneficiary CNIC/NICOP/Passport No: 
+       
+            SECTION 17: GUIDELINES FOR INVESTORS
+            - Guidelines Read and Understood: [Yes/No]
+            
+            SECTION 18: NOTE AND DECLARATION
+            - Declaration Signed: [Yes/No]
+            
+            SECTION 19: APPLICATION CHECKLIST
+            - CNIC Copy Attached: [Yes/No]
+            - Business/Employment Proof Attached: [Yes/No]
+            - Zakat Declaration Attached: [Yes/No]
+            - FATCA Form Attached: [Yes/No]
+            - CRS Form Attached: [Yes/No]
+            - Health Questionnaire Attached: [Yes/No]
+            
+            SECTION 20: SALES INFORMATION
+            - Sales Person's Name: 
+            - Manager's Name: 
+            - Distributor Stamp: [Present/Absent]
+            - DAO Code: 
+            - Remarks: 
+            
+            IMPORTANT: Extract ALL fields exactly as they appear. For checkboxes, write the SELECTED option only.
+            Format: Field Name: Value
+            """
+        },
+        "fatca": {
+            "name": "FATCA Form – Individual Account",
+            "keywords": ["fatca", "us citizen", "us resident", "green card", "tax residence", "place of birth"],
+            "prompt": """
+            Extract ALL information from the FATCA FORM – INDIVIDUAL ACCOUNT.
+            
+            SECTION 1: ACCOUNT INFORMATION
+            - Title of Account: 
+            - CNIC#: 
+            - Customer ID: 
+            - Country of tax residence: 
+            - Place of Birth: 
+            
+            SECTION 2: US STATUS QUESTIONS
+            - US Citizen: [Yes/No]
+            - US Resident: [Yes/No]
+            - Green Card Holder: [Yes/No]
+            - Born in USA: [Yes/No]
+            - Transfer funds to USA: [Yes/No]
+            - Power of Attorney with US address: [Yes/No]
+            - US residence/mailing address: [Yes/No]
+            - US telephone number: [Yes/No]
+            
+            SECTION 3: DECLARATION
+            - Signature: 
+            - Date: 
+            - US Taxpayer ID: 
+            
+            IMPORTANT: Only extract from FATCA Form.
+            Format: Field Name: Value
+            """
+        },
+        "crs": {
+            "name": "CRS Form",
+            "keywords": ["crs", "tax residence", "tin", "self certification", "common reporting"],
+            "prompt": """
+            Extract ALL information from the CRS FORM.
+            
+            SECTION 1: IDENTIFICATION
+            - Name as per CNIC: 
+            - Father/Husband Name: 
+            - CNIC Number: 
+            - Date of Birth: 
+            - City of Birth: 
+            - Country of Birth: 
+            
+            SECTION 2: ADDRESSES
+            - Current Address: 
+            - Current Country: 
+            - Mailing Address: 
+            - Mailing Country: 
+            
+            SECTION 3: TAX RESIDENCE
+            - Tax Residence Country 1: 
+            - TIN 1: 
+            - Tax Residence Country 2: 
+            - TIN 2: 
+            - Tax Residence Country 3: 
+            - TIN 3: 
+            
+            SECTION 4: DECLARATION
+            - Signature: 
+            - Date: 
+            
+            IMPORTANT: Only extract from CRS Form.
+            Format: Field Name: Value
+            """
+        }
+    }
+    
+    # Initialize data storage
+    extracted_data = {
+        "account_opening": {},
+        "fatca": {},
+        "crs": {}
+    }
+    
+    # Process each page
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    for page_num, image in enumerate(pdf_images):
+        page_index = page_num + 1
+        status_text.text(f"🔍 Processing page {page_index}...")
+
+        # Enforce exactly 5 pages
+        if page_index not in AL_MEEZAN_PAGE_FORM_MAP:
+            st.warning(f"⚠️ Unexpected page {page_index} skipped")
+            continue
+
+        form_key = AL_MEEZAN_PAGE_FORM_MAP[page_index]
+        form_config = form_prompts[form_key]
+
+        # Select correct prompt
+        if form_key == "account_opening":
+            prompt = get_account_opening_prompt_by_page(
+                page_index,
+                form_config["prompt"]
+            )
+        else:
+            prompt = form_config["prompt"]
+
+        extracted = extract_form_data(
+            image=image,
+            prompt=prompt,
+            page_num=page_index
+        )
+
+        if extracted:
+            parsed = parse_al_meezan_detailed_response(extracted)
+
+            for field, value in parsed.items():
+                if value and value not in ["", "BLANK", "N/A"]:
+                    extracted_data[form_key][field] = value
+
+            st.success(
+                f"✅ Page {page_index}: {form_config['name']} "
+                f"({len(parsed)} fields extracted)"
+            )
+
+        progress_bar.progress(page_index / len(pdf_images))
+
+    
+    progress_bar.empty()
+    status_text.text("✅ Form identification complete!")
+    
+    # Display results in tabs
+    display_al_meezan_package_tabbed(extracted_data, form_prompts, col2)
+
+def identify_form_on_page(image, form_prompts, page_num):
+    """Identify which form is on the current page."""
+    try:
+        # Use a quick identification prompt
+        id_prompt = """
+        Look at this page and tell me which form it is:
+        
+        Options:
+        1. INVESTOR ACCOUNT OPENING FORM FOR INDIVIDUAL - Main account details, personal information
+        2. FATCA FORM – INDIVIDUAL ACCOUNT - US tax compliance, questions about US citizenship
+        3. CRS FORM - Tax residence, TIN numbers, self-certification
+        
+        Respond with ONLY the form number (1, 2, or 3). If none match, respond with "0".
+        """
+        
+        response = call_qwen_api_with_image_single(image, id_prompt, page_num)
+        
+        if response:
+            response = response.strip()
+            if "1" in response:
+                return "account_opening"
+            elif "2" in response:
+                return "fatca"
+            elif "3" in response:
+                return "crs"
+        
+        return None
+        
+    except Exception as e:
+        st.warning(f"Could not identify form on page {page_num}: {str(e)}")
+        return None
+
+def extract_form_data(image, prompt, page_num):
+    """Extract data from a specific form."""
+    try:
+        # Add strict instructions to the prompt
+        strict_prompt = f"""
+        IMPORTANT: You are looking at a SINGLE FORM on page {page_num}.
+        
+        {prompt}
+        
+        STRICT RULES:
+        1. Extract ONLY the fields mentioned above
+        2. IGNORE all other forms and information
+        3. If a field is not found, skip it
+        4. Format exactly as: Field Name: Value
+        5. No explanations, no extra text
+        """
+        
+        return call_qwen_api_with_image_single(image, strict_prompt, page_num)
+        
+    except Exception as e:
+        st.error(f"Error extracting form data from page {page_num}: {str(e)}")
+        return None
+
+def parse_al_meezan_detailed_response(response_text):
+    """Parse detailed response text for Al Meezan forms."""
+    data = {}
+    
+    if not response_text:
+        return data
+    
+    lines = response_text.strip().split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        
+        # Skip empty lines and section headers
+        if not line or line.startswith("SECTION") or line.startswith("IMPORTANT") or line.startswith("STRICT"):
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            if len(parts) == 2:
+                field = parts[0].strip()
+                value = parts[1].strip()
+                
+                # Clean up the value
+                value = clean_al_meezan_value(value)
+                
+                if value and value not in ["", "BLANK", "N/A", "Not found", "Not applicable"]:
+                    data[field] = value
+    
+    return data
+
+def clean_al_meezan_value(value):
+    """Clean up form field values with enhanced checkbox handling for Al Meezan forms."""
+    if not value:
+        return ""
+    
+    # Handle various checkbox formats
+    if any(marker in value for marker in ['[✓]', '[X]', '✓', '✔', '☑', '[SELECTED]', '[CHECKED]']):
+        # This is a checked checkbox
+        if any(marker in value for marker in ['[✓]', '✓', '✔', '[SELECTED]', '[CHECKED]']):
+            return "Yes"
+        elif '[X]' in value:
+            return "No"
+    
+    # Remove brackets but keep content
+    if '[' in value and ']' in value:
+        # Extract content inside brackets
+        import re
+        bracket_content = re.findall(r'\[([^]]+)\]', value)
+        if bracket_content:
+            # If there's text outside brackets, keep it
+            text_outside = re.sub(r'\[[^]]*\]', '', value).strip()
+            if text_outside:
+                return f"{text_outside} ({bracket_content[0]})"
+            else:
+                return bracket_content[0].strip()
+    
+    # Clean up checkboxes
+    value = value.replace('✓', 'Yes').replace('✔', 'Yes').replace('[X]', 'No').replace('[ ]', 'No')
+    value = value.replace('[', '').replace(']', '').strip()
+    
+    return value
+
+def display_al_meezan_package_tabbed(extracted_data, form_prompts, col2):
+    """Display the 3 targeted forms' results in tabs with the same styling."""
+    
+    with col2:
+        st.markdown("### 📝 Al Meezan Package - 3 Forms Data")
+
+        if any(extracted_data.values()):
+            # Combine all extracted data
+            all_data = {}
+            for form_key in extracted_data:
+                all_data.update(extracted_data[form_key])
+            
+            # Generate PDF immediately
+            try:
+                pdf_path = save_al_meezan_package_to_pdf(all_data)
+                st.session_state["al_meezan_pdf_path"] = pdf_path
+                
+                # Show download button immediately
+                with open(pdf_path, "rb") as f:
+                    st.sidebar.download_button(
+                        "📥 Download All Forms PDF", 
+                        f, 
+                        file_name="al_meezan_package_data.pdf", 
+                        mime="application/pdf", 
+                        use_container_width=True,
+                        key="al_meezan_download_btn"
+                    )
+                    st.success("✅ PDF ready for download!")
+            except Exception as e:
+                st.error(f"Error creating PDF: {str(e)}")
+        
+        # Create tabs for each form
+        tab_names = [
+            "Investor Account Opening Form", 
+            "FATCA Form", 
+            "CRS Form"
+        ]
+        
+        tab_keys = ["account_opening", "fatca", "crs"]
+        
+        tabs = st.tabs(tab_names)
+        
+        # Store edited data
+        edited_forms_data = {
+            "account_opening": {},
+            "fatca": {},
+            "crs": {}
+        }
+        
+        for tab_idx, (tab_name, form_key) in enumerate(zip(tab_names, tab_keys)):
+            with tabs[tab_idx]:
+                form_data = extracted_data[form_key]
+                
+                if form_data:
+                    with st.container(height=700):
+                        with st.form(f"{form_key}_form"):
+                            edited_form = {}
+                            cols = st.columns(2)
+                            
+                            # Display fields in two columns
+                            field_list = list(form_data.items())
+                            for idx, (field, value) in enumerate(field_list):
+                                col = cols[idx % 2]
+                                with col:
+                                    edited_form[field] = st.text_input(
+                                        field, 
+                                        value=value if value else "",
+                                        key=f"{form_key}_{field}"
+                                    )
+                            
+                            submitted = st.form_submit_button(f"Save {tab_name} Data")
+                            
+                            if submitted:
+                                edited_forms_data[form_key] = edited_form
+                                st.success(f"✅ {tab_name} data saved!")
+                    
+                    # Show field count
+                    st.caption(f"📋 {len(form_data)} fields extracted")
+                else:
+                    st.info("No data extracted for this form. It might not be in the uploaded document.")
+        
+        # Combine all edited forms when any is submitted
+        all_edited_data = {}
+        for form_key in edited_forms_data:
+            if edited_forms_data[form_key]:
+                all_edited_data.update(edited_forms_data[form_key])
+        
+        # Save PDF if data exists
+        if all_edited_data:
+            # Combine original extracted data with edited data
+            combined_data = {}
+            for form_key in extracted_data:
+                combined_data.update(extracted_data[form_key])
+            combined_data.update(all_edited_data)
+            
+            pdf_path = save_al_meezan_package_to_pdf(combined_data)
+            
+            # Store in session state for download
+            st.session_state["al_meezan_edited_data"] = combined_data
+            st.session_state["al_meezan_pdf_path"] = pdf_path
+        
+        # Display extracted and structured data (outside tabs)
+        st.markdown("---")
+        
+        # Show raw extracted data for each form
+        for form_key in extracted_data:
+            if extracted_data[form_key]:
+                st.subheader(f'{form_prompts[form_key]["name"]} - Extracted Data')
+                for field, value in extracted_data[form_key].items():
+                    st.write(f"{field}: {value}")
+        
+        # Download button (always visible)
+        if "al_meezan_pdf_path" in st.session_state:
+            with open(st.session_state["al_meezan_pdf_path"], "rb") as f:
+                st.sidebar.download_button(
+                    "Download All Forms PDF", 
+                    f, 
+                    file_name="al_meezan_package_data.pdf", 
+                    mime="application/pdf", 
+                    use_container_width=True
+                )
+
+
+def parse_al_meezan_package(response_text: str) -> dict:
+    """Parse Al Meezan Package - 3 Forms"""
+    data = {}
+    
+    # Form indicator
+    data["Form Type"] = "Al Meezan Package - 3 Forms"
+    
+    # ====================================
+    # FORM 1: INVESTOR ACCOUNT OPENING FORM
+    # ====================================
+    
+    # Account Information
+    account_info_fields = [
+        "Customer ID", "Portfolio No", "Date", "Day", "Month", "Year", 
+        "Type of Account"
+    ]
+    
+    # Personal Details
+    personal_fields = [
+        "Name", "Father's/Husband's Name", "Mother's Maiden Name",
+        "CNIC/NICOP/Passport No", "Issuance Date", "Expiry Date",
+        "Date of Birth", "Marital Status", "Religion", "Place of Birth",
+        "Nationality", "Dual Nationality"
+    ]
+    
+    # Address Information
+    address_fields = [
+        "Mailing Address", "Mailing City", "Mailing Country",
+        "Current Address", "Current City", "Current Country"
+    ]
+    
+    # Contact Details
+    contact_fields = [
+        "Residential Status", "Email", "Mobile", "Mobile Network",
+        "Tel/Res Office"
+    ]
+    
+    # Bank Details
+    bank_fields = [
+        "Bank Account No", "Bank Name", "Branch", "City"
+    ]
+    
+    # Special Instructions
+    special_instruction_fields = [
+        "Account Operating Instructions", "Dividend Mandate",
+        "Communication Mode", "Stock Dividend"
+    ]
+    
+    # MTPF Details
+    mtpf_fields = [
+        "Expected Retirement Date", "Note for Pension Fund investments"
+    ]
+    
+    # Allocation Scheme
+    allocation_fields = ["Selected Allocation Scheme"]
+    
+    # Source of Income & Wealth
+    income_wealth_fields = [
+        "Source of Income", "Source of Wealth", "Name of Employer/Business",
+        "Designation", "Nature of Business"
+    ]
+    
+    # Education & Geography
+    education_fields = [
+        "Education", "Geographies involved", "Type of Counterparties"
+    ]
+    
+    # Transaction Details
+    transaction_fields = [
+        "Possible Modes of Transactions", "Expected Turnover in Account",
+        "Expected Amount of Investment", "Annual Income", "Expected No. of Transactions"
+    ]
+    
+    # Risk Assessment
+    risk_fields = [
+        "Age Group", "Risk-Return Tolerance", "Monthly Savings", "Occupation"
+    ]
+    
+    # Investment Knowledge
+    investment_fields = [
+        "Investment Knowledge Level", "Investment Objective", "Investment Horizon"
+    ]
+    
+    # Portfolio Calculation
+    portfolio_fields = [
+        "Total Score", "Recommended Portfolio", "Calculated ideal Portfolio"
+    ]
+    
+    # Next of Kin
+    next_of_kin_fields = [
+        "Next of Kin Name", "Next of Kin Contact", "Next of Kin Address"
+    ]
+    
+    # Beneficiary Details
+    beneficiary_fields = [
+        "Ultimate Beneficiary Name", "Relation with Customer", 
+        "Beneficiary CNIC/NICOP/Passport No"
+    ]
+    
+    # Guidelines
+    guidelines_fields = ["Guidelines Read and Understood"]
+    
+    # Declaration
+    declaration_fields = ["Declaration Signed"]
+    
+    # Application Checklist
+    checklist_fields = [
+        "CNIC Copy Attached", "Business/Employment Proof Attached",
+        "Zakat Declaration Attached", "FATCA Form Attached",
+        "CRS Form Attached", "Health Questionnaire Attached"
+    ]
+    
+    # Sales Information
+    sales_fields = [
+        "Sales Person's Name", "Manager's Name", "Distributor Stamp",
+        "DAO Code", "Remarks"
+    ]
+    
+    # ====================================
+    # FORM 2: FATCA FORM
+    # ====================================
+    
+    # FATCA Account Information
+    fatca_account_fields = [
+        "FATCA - Title of Account", "FATCA - CNIC#", "FATCA - Customer ID",
+        "FATCA - Country of tax residence", "FATCA - Place of Birth"
+    ]
+    
+    # FATCA US Status Questions
+    fatca_status_fields = [
+        "FATCA - US Citizen", "FATCA - US Resident", "FATCA - Green Card Holder",
+        "FATCA - Born in USA", "FATCA - Transfer funds to USA",
+        "FATCA - Power of Attorney with US address", 
+        "FATCA - US residence/mailing address", "FATCA - US telephone number"
+    ]
+    
+    # FATCA Declaration
+    fatca_declaration_fields = [
+        "FATCA - Signature", "FATCA - Date", "FATCA - US Taxpayer ID"
+    ]
+    
+    # ====================================
+    # FORM 3: CRS FORM
+    # ====================================
+    
+    # CRS Identification
+    crs_identification_fields = [
+        "CRS - Name as per CNIC", "CRS - Father/Husband Name", 
+        "CRS - CNIC Number", "CRS - Date of Birth", 
+        "CRS - City of Birth", "CRS - Country of Birth"
+    ]
+    
+    # CRS Addresses
+    crs_address_fields = [
+        "CRS - Current Address", "CRS - Current Country",
+        "CRS - Mailing Address", "CRS - Mailing Country"
+    ]
+    
+    # CRS Tax Residence
+    crs_tax_fields = [
+        "CRS - Tax Residence Country 1", "CRS - TIN 1",
+        "CRS - Tax Residence Country 2", "CRS - TIN 2",
+        "CRS - Tax Residence Country 3", "CRS - TIN 3"
+    ]
+    
+    # CRS Declaration
+    crs_declaration_fields = ["CRS - Signature", "CRS - Date"]
+    
+    # Combine all field lists
+    all_fields = (
+        account_info_fields + personal_fields + address_fields + 
+        contact_fields + bank_fields + special_instruction_fields +
+        mtpf_fields + allocation_fields + income_wealth_fields +
+        education_fields + transaction_fields + risk_fields +
+        investment_fields + portfolio_fields + next_of_kin_fields +
+        beneficiary_fields + guidelines_fields + declaration_fields +
+        checklist_fields + sales_fields + fatca_account_fields +
+        fatca_status_fields + fatca_declaration_fields +
+        crs_identification_fields + crs_address_fields +
+        crs_tax_fields + crs_declaration_fields
+    )
+    
+    # Extract values for all fields
+    for field in all_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+        else:
+            # Check for alternative field names
+            alt_field = field.replace("FATCA - ", "").replace("CRS - ", "")
+            alt_value = extract_value(response_text, alt_field)
+            if alt_value:
+                data[field] = alt_value
+            elif "FATCA" in field or "CRS" in field:
+                # For FATCA/CRS specific fields, look in their sections
+                section_start = response_text.find("FORM 2:") if "FATCA" in field else response_text.find("FORM 3:")
+                section_end = response_text.find("FORM 3:") if "FATCA" in field else len(response_text)
+                
+                if section_start != -1:
+                    section_text = response_text[section_start:section_end]
+                    section_value = extract_value(section_text, field.replace("FATCA - ", "").replace("CRS - ", ""))
+                    if section_value:
+                        data[field] = section_value
+    
+    return data
+
+
+def save_al_meezan_package_to_pdf(form_data):
+    """Save Al Meezan Package (3 forms) data to PDF"""
+    PAGE_WIDTH, PAGE_HEIGHT = A4
+    pdf_file = "al_meezan_package_data.pdf"
+    c = canvas.Canvas(pdf_file, pagesize=A4)
+    
+    # Header
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 50, "AL MEEZAN PACKAGE - 3 FORMS")
+    c.setFont("Helvetica", 10)
+    c.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 70, "Extracted Form Data")
+    
+    y = PAGE_HEIGHT - 100
+    
+    # Form 1: Account Opening Form
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, y, "FORM 1: INVESTOR ACCOUNT OPENING FORM FOR INDIVIDUAL")
+    y -= 25
+    
+    # Group fields by form
+    account_opening_fields = [
+        "Customer ID", "Portfolio No", "Date", "Type of Account",
+        "Name", "Father's/Husband's Name", "Mother's Maiden Name",
+        "CNIC/NICOP/Passport No", "Issuance Date", "Expiry Date",
+        "Date of Birth", "Marital Status", "Religion", "Place of Birth",
+        "Nationality", "Dual Nationality", "Mailing Address", "Mailing City",
+        "Mailing Country", "Current Address", "Current City", "Current Country",
+        "Residential Status", "Email", "Mobile", "Mobile Network",
+        "Tel/Res Office", "Bank Account No", "Bank Name", "Branch", "City",
+        "Account Operating Instructions", "Dividend Mandate",
+        "Communication Mode", "Stock Dividend", "Expected Retirement Date",
+        "Selected Allocation Scheme", "Source of Income", "Source of Wealth",
+        "Name of Employer/Business", "Designation", "Nature of Business",
+        "Education", "Geographies involved", "Type of Counterparties",
+        "Possible Modes of Transactions", "Expected Turnover in Account",
+        "Expected Amount of Investment", "Annual Income", "Expected No. of Transactions",
+        "Age Group", "Risk-Return Tolerance", "Monthly Savings", "Occupation",
+        "Investment Knowledge Level", "Investment Objective", "Investment Horizon",
+        "Total Score", "Recommended Portfolio", "Calculated ideal Portfolio",
+        "Next of Kin Name", "Next of Kin Contact", "Next of Kin Address",
+        "Ultimate Beneficiary Name", "Relation with Customer",
+        "Beneficiary CNIC/NICOP/Passport No", "Guidelines Read and Understood",
+        "Declaration Signed", "CNIC Copy Attached", "Business/Employment Proof Attached",
+        "Zakat Declaration Attached", "FATCA Form Attached", "CRS Form Attached",
+        "Health Questionnaire Attached", "Sales Person's Name", "Manager's Name",
+        "Distributor Stamp", "DAO Code", "Remarks"
+    ]
+    
+    # Display Account Opening Form fields
+    c.setFont("Helvetica", 9)
+    for field in account_opening_fields:
+        if field in form_data and form_data[field] not in ["", "Not provided"]:
+            # Check for new page
+            if y < 50:
+                c.showPage()
+                c.setFont("Helvetica-Bold", 14)
+                c.drawString(40, PAGE_HEIGHT - 50, "ACCOUNT OPENING FORM (Continued)")
+                y = PAGE_HEIGHT - 80
+                c.setFont("Helvetica", 9)
+            
+            value = str(form_data[field])
+            if len(value) > 80:
+                value = value[:77] + "..."
+            
+            c.drawString(40, y, f"{field}: {value}")
+            y -= 15
+    
+    y -= 20
+    
+    # Form 2: FATCA Form
+    if y < 100:
+        c.showPage()
+        y = PAGE_HEIGHT - 50
+    
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, y, "FORM 2: FATCA FORM – INDIVIDUAL ACCOUNT")
+    y -= 25
+    
+    fatca_fields = [
+        "FATCA - Title of Account", "FATCA - CNIC#", "FATCA - Customer ID",
+        "FATCA - Country of tax residence", "FATCA - Place of Birth",
+        "FATCA - US Citizen", "FATCA - US Resident", "FATCA - Green Card Holder",
+        "FATCA - Born in USA", "FATCA - Transfer funds to USA",
+        "FATCA - Power of Attorney with US address", 
+        "FATCA - US residence/mailing address", "FATCA - US telephone number",
+        "FATCA - Signature", "FATCA - Date", "FATCA - US Taxpayer ID"
+    ]
+    
+    c.setFont("Helvetica", 9)
+    for field in fatca_fields:
+        if field in form_data and form_data[field] not in ["", "Not provided"]:
+            if y < 50:
+                c.showPage()
+                c.setFont("Helvetica-Bold", 14)
+                c.drawString(40, PAGE_HEIGHT - 50, "FATCA FORM (Continued)")
+                y = PAGE_HEIGHT - 80
+                c.setFont("Helvetica", 9)
+            
+            value = str(form_data[field])
+            c.drawString(40, y, f"{field.replace('FATCA - ', '')}: {value}")
+            y -= 15
+    
+    y -= 20
+    
+    # Form 3: CRS Form
+    if y < 100:
+        c.showPage()
+        y = PAGE_HEIGHT - 50
+    
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, y, "FORM 3: CRS FORM")
+    y -= 25
+    
+    crs_fields = [
+        "CRS - Name as per CNIC", "CRS - Father/Husband Name", 
+        "CRS - CNIC Number", "CRS - Date of Birth", 
+        "CRS - City of Birth", "CRS - Country of Birth",
+        "CRS - Current Address", "CRS - Current Country",
+        "CRS - Mailing Address", "CRS - Mailing Country",
+        "CRS - Tax Residence Country 1", "CRS - TIN 1",
+        "CRS - Tax Residence Country 2", "CRS - TIN 2",
+        "CRS - Tax Residence Country 3", "CRS - TIN 3",
+        "CRS - Signature", "CRS - Date"
+    ]
+    
+    c.setFont("Helvetica", 9)
+    for field in crs_fields:
+        if field in form_data and form_data[field] not in ["", "Not provided"]:
+            if y < 50:
+                c.showPage()
+                c.setFont("Helvetica-Bold", 14)
+                c.drawString(40, PAGE_HEIGHT - 50, "CRS FORM (Continued)")
+                y = PAGE_HEIGHT - 80
+                c.setFont("Helvetica", 9)
+            
+            value = str(form_data[field])
+            c.drawString(40, y, f"{field.replace('CRS - ', '')}: {value}")
+            y -= 15
+    
+    c.save()
+    return pdf_file
+
+
+
+def parse_al_meezan_package(response_text: str) -> dict:
+    """Parse Al Meezan Package - 3 Forms"""
+    data = {}
+    
+    # Form indicator
+    data["Form Type"] = "Al Meezan Package - 3 Forms"
+    
+    # ====================================
+    # FORM 1: INVESTOR ACCOUNT OPENING FORM
+    # ====================================
+    
+    # Account Information
+    account_info_fields = [
+        "Customer ID", "Portfolio No", "Date", "Day", "Month", "Year", 
+        "Type of Account"
+    ]
+    
+    # Personal Details
+    personal_fields = [
+        "Name", "Father's/Husband's Name", "Mother's Maiden Name",
+        "CNIC/NICOP/Passport No", "Issuance Date", "Expiry Date",
+        "Date of Birth", "Marital Status", "Religion", "Place of Birth",
+        "Nationality", "Dual Nationality"
+    ]
+    
+    # Address Information
+    address_fields = [
+        "Mailing Address", "Mailing City", "Mailing Country",
+        "Current Address", "Current City", "Current Country"
+    ]
+    
+    # Contact Details
+    contact_fields = [
+        "Residential Status", "Email", "Mobile", "Mobile Network",
+        "Tel/Res Office"
+    ]
+    
+    # Bank Details
+    bank_fields = [
+        "Bank Account No", "Bank Name", "Branch", "City"
+    ]
+    
+    # Special Instructions
+    special_instruction_fields = [
+        "Account Operating Instructions", "Dividend Mandate",
+        "Communication Mode", "Stock Dividend"
+    ]
+    
+    # MTPF Details
+    mtpf_fields = [
+        "Expected Retirement Date", "Note for Pension Fund investments"
+    ]
+    
+    # Allocation Scheme
+    allocation_fields = ["Selected Allocation Scheme"]
+    
+    # Source of Income & Wealth
+    income_wealth_fields = [
+        "Source of Income", "Source of Wealth", "Name of Employer/Business",
+        "Designation", "Nature of Business"
+    ]
+    
+    # Education & Geography
+    education_fields = [
+        "Education", "Geographies involved", "Type of Counterparties"
+    ]
+    
+    # Transaction Details
+    transaction_fields = [
+        "Possible Modes of Transactions", "Expected Turnover in Account",
+        "Expected Amount of Investment", "Annual Income", "Expected No. of Transactions"
+    ]
+    
+    # Risk Assessment
+    risk_fields = [
+        "Age Group", "Risk-Return Tolerance", "Monthly Savings", "Occupation"
+    ]
+    
+    # Investment Knowledge
+    investment_fields = [
+        "Investment Knowledge Level", "Investment Objective", "Investment Horizon"
+    ]
+    
+    # Portfolio Calculation
+    portfolio_fields = [
+        "Total Score", "Recommended Portfolio", "Calculated ideal Portfolio"
+    ]
+    
+    # Next of Kin
+    next_of_kin_fields = [
+        "Next of Kin Name", "Next of Kin Contact", "Next of Kin Address"
+    ]
+    
+    # Beneficiary Details
+    beneficiary_fields = [
+        "Ultimate Beneficiary Name", "Relation with Customer", 
+        "Beneficiary CNIC/NICOP/Passport No"
+    ]
+    
+    # Guidelines
+    guidelines_fields = ["Guidelines Read and Understood"]
+    
+    # Declaration
+    declaration_fields = ["Declaration Signed"]
+    
+    # Application Checklist
+    checklist_fields = [
+        "CNIC Copy Attached", "Business/Employment Proof Attached",
+        "Zakat Declaration Attached", "FATCA Form Attached",
+        "CRS Form Attached", "Health Questionnaire Attached"
+    ]
+    
+    # Sales Information
+    sales_fields = [
+        "Sales Person's Name", "Manager's Name", "Distributor Stamp",
+        "DAO Code", "Remarks"
+    ]
+    
+    # ====================================
+    # FORM 2: FATCA FORM
+    # ====================================
+    
+    # FATCA Account Information
+    fatca_account_fields = [
+        "FATCA - Title of Account", "FATCA - CNIC#", "FATCA - Customer ID",
+        "FATCA - Country of tax residence", "FATCA - Place of Birth"
+    ]
+    
+    # FATCA US Status Questions
+    fatca_status_fields = [
+        "FATCA - US Citizen", "FATCA - US Resident", "FATCA - Green Card Holder",
+        "FATCA - Born in USA", "FATCA - Transfer funds to USA",
+        "FATCA - Power of Attorney with US address", 
+        "FATCA - US residence/mailing address", "FATCA - US telephone number"
+    ]
+    
+    # FATCA Declaration
+    fatca_declaration_fields = [
+        "FATCA - Signature", "FATCA - Date", "FATCA - US Taxpayer ID"
+    ]
+    
+    # ====================================
+    # FORM 3: CRS FORM
+    # ====================================
+    
+    # CRS Identification
+    crs_identification_fields = [
+        "CRS - Name as per CNIC", "CRS - Father/Husband Name", 
+        "CRS - CNIC Number", "CRS - Date of Birth", 
+        "CRS - City of Birth", "CRS - Country of Birth"
+    ]
+    
+    # CRS Addresses
+    crs_address_fields = [
+        "CRS - Current Address", "CRS - Current Country",
+        "CRS - Mailing Address", "CRS - Mailing Country"
+    ]
+    
+    # CRS Tax Residence
+    crs_tax_fields = [
+        "CRS - Tax Residence Country 1", "CRS - TIN 1",
+        "CRS - Tax Residence Country 2", "CRS - TIN 2",
+        "CRS - Tax Residence Country 3", "CRS - TIN 3"
+    ]
+    
+    # CRS Declaration
+    crs_declaration_fields = ["CRS - Signature", "CRS - Date"]
+    
+    # Combine all field lists
+    all_fields = (
+        account_info_fields + personal_fields + address_fields + 
+        contact_fields + bank_fields + special_instruction_fields +
+        mtpf_fields + allocation_fields + income_wealth_fields +
+        education_fields + transaction_fields + risk_fields +
+        investment_fields + portfolio_fields + next_of_kin_fields +
+        beneficiary_fields + guidelines_fields + declaration_fields +
+        checklist_fields + sales_fields + fatca_account_fields +
+        fatca_status_fields + fatca_declaration_fields +
+        crs_identification_fields + crs_address_fields +
+        crs_tax_fields + crs_declaration_fields
+    )
+    
+    # Extract values for all fields
+    for field in all_fields:
+        value = extract_value(response_text, field)
+        if value:
+            data[field] = value
+        else:
+            # Check for alternative field names
+            alt_field = field.replace("FATCA - ", "").replace("CRS - ", "")
+            alt_value = extract_value(response_text, alt_field)
+            if alt_value:
+                data[field] = alt_value
+            elif "FATCA" in field or "CRS" in field:
+                # For FATCA/CRS specific fields, look in their sections
+                section_start = response_text.find("FORM 2:") if "FATCA" in field else response_text.find("FORM 3:")
+                section_end = response_text.find("FORM 3:") if "FATCA" in field else len(response_text)
+                
+                if section_start != -1:
+                    section_text = response_text[section_start:section_end]
+                    section_value = extract_value(section_text, field.replace("FATCA - ", "").replace("CRS - ", ""))
+                    if section_value:
+                        data[field] = section_value
+    
+    return data
+
+
+def save_al_meezan_package_to_pdf(form_data):
+    """Save Al Meezan Package (3 forms) data to PDF"""
+    PAGE_WIDTH, PAGE_HEIGHT = A4
+    pdf_file = "al_meezan_package_data.pdf"
+    c = canvas.Canvas(pdf_file, pagesize=A4)
+    
+    # Header
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 50, "AL MEEZAN PACKAGE - 3 FORMS")
+    c.setFont("Helvetica", 10)
+    c.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 70, "Extracted Form Data")
+    
+    y = PAGE_HEIGHT - 100
+    
+    # Form 1: Account Opening Form
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, y, "FORM 1: INVESTOR ACCOUNT OPENING FORM FOR INDIVIDUAL")
+    y -= 25
+    
+    # Group fields by form
+    account_opening_fields = [
+        "Customer ID", "Portfolio No", "Date", "Type of Account",
+        "Name", "Father's/Husband's Name", "Mother's Maiden Name",
+        "CNIC/NICOP/Passport No", "Issuance Date", "Expiry Date",
+        "Date of Birth", "Marital Status", "Religion", "Place of Birth",
+        "Nationality", "Dual Nationality", "Mailing Address", "Mailing City",
+        "Mailing Country", "Current Address", "Current City", "Current Country",
+        "Residential Status", "Email", "Mobile", "Mobile Network",
+        "Tel/Res Office", "Bank Account No", "Bank Name", "Branch", "City",
+        "Account Operating Instructions", "Dividend Mandate",
+        "Communication Mode", "Stock Dividend", "Expected Retirement Date",
+        "Selected Allocation Scheme", "Source of Income", "Source of Wealth",
+        "Name of Employer/Business", "Designation", "Nature of Business",
+        "Education", "Geographies involved", "Type of Counterparties",
+        "Possible Modes of Transactions", "Expected Turnover in Account",
+        "Expected Amount of Investment", "Annual Income", "Expected No. of Transactions",
+        "Age Group", "Risk-Return Tolerance", "Monthly Savings", "Occupation",
+        "Investment Knowledge Level", "Investment Objective", "Investment Horizon",
+        "Total Score", "Recommended Portfolio", "Calculated ideal Portfolio",
+        "Next of Kin Name", "Next of Kin Contact", "Next of Kin Address",
+        "Ultimate Beneficiary Name", "Relation with Customer",
+        "Beneficiary CNIC/NICOP/Passport No", "Guidelines Read and Understood",
+        "Declaration Signed", "CNIC Copy Attached", "Business/Employment Proof Attached",
+        "Zakat Declaration Attached", "FATCA Form Attached", "CRS Form Attached",
+        "Health Questionnaire Attached", "Sales Person's Name", "Manager's Name",
+        "Distributor Stamp", "DAO Code", "Remarks"
+    ]
+    
+    # Display Account Opening Form fields
+    c.setFont("Helvetica", 9)
+    for field in account_opening_fields:
+        if field in form_data and form_data[field] not in ["", "Not provided"]:
+            # Check for new page
+            if y < 50:
+                c.showPage()
+                c.setFont("Helvetica-Bold", 14)
+                c.drawString(40, PAGE_HEIGHT - 50, "ACCOUNT OPENING FORM (Continued)")
+                y = PAGE_HEIGHT - 80
+                c.setFont("Helvetica", 9)
+            
+            value = str(form_data[field])
+            if len(value) > 80:
+                value = value[:77] + "..."
+            
+            c.drawString(40, y, f"{field}: {value}")
+            y -= 15
+    
+    y -= 20
+    
+    # Form 2: FATCA Form
+    if y < 100:
+        c.showPage()
+        y = PAGE_HEIGHT - 50
+    
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, y, "FORM 2: FATCA FORM – INDIVIDUAL ACCOUNT")
+    y -= 25
+    
+    fatca_fields = [
+        "FATCA - Title of Account", "FATCA - CNIC#", "FATCA - Customer ID",
+        "FATCA - Country of tax residence", "FATCA - Place of Birth",
+        "FATCA - US Citizen", "FATCA - US Resident", "FATCA - Green Card Holder",
+        "FATCA - Born in USA", "FATCA - Transfer funds to USA",
+        "FATCA - Power of Attorney with US address", 
+        "FATCA - US residence/mailing address", "FATCA - US telephone number",
+        "FATCA - Signature", "FATCA - Date", "FATCA - US Taxpayer ID"
+    ]
+    
+    c.setFont("Helvetica", 9)
+    for field in fatca_fields:
+        if field in form_data and form_data[field] not in ["", "Not provided"]:
+            if y < 50:
+                c.showPage()
+                c.setFont("Helvetica-Bold", 14)
+                c.drawString(40, PAGE_HEIGHT - 50, "FATCA FORM (Continued)")
+                y = PAGE_HEIGHT - 80
+                c.setFont("Helvetica", 9)
+            
+            value = str(form_data[field])
+            c.drawString(40, y, f"{field.replace('FATCA - ', '')}: {value}")
+            y -= 15
+    
+    y -= 20
+    
+    # Form 3: CRS Form
+    if y < 100:
+        c.showPage()
+        y = PAGE_HEIGHT - 50
+    
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, y, "FORM 3: CRS FORM")
+    y -= 25
+    
+    crs_fields = [
+        "CRS - Name as per CNIC", "CRS - Father/Husband Name", 
+        "CRS - CNIC Number", "CRS - Date of Birth", 
+        "CRS - City of Birth", "CRS - Country of Birth",
+        "CRS - Current Address", "CRS - Current Country",
+        "CRS - Mailing Address", "CRS - Mailing Country",
+        "CRS - Tax Residence Country 1", "CRS - TIN 1",
+        "CRS - Tax Residence Country 2", "CRS - TIN 2",
+        "CRS - Tax Residence Country 3", "CRS - TIN 3",
+        "CRS - Signature", "CRS - Date"
+    ]
+    
+    c.setFont("Helvetica", 9)
+    for field in crs_fields:
+        if field in form_data and form_data[field] not in ["", "Not provided"]:
+            if y < 50:
+                c.showPage()
+                c.setFont("Helvetica-Bold", 14)
+                c.drawString(40, PAGE_HEIGHT - 50, "CRS FORM (Continued)")
+                y = PAGE_HEIGHT - 80
+                c.setFont("Helvetica", 9)
+            
+            value = str(form_data[field])
+            c.drawString(40, y, f"{field.replace('CRS - ', '')}: {value}")
+            y -= 15
+    
+    c.save()
+    return pdf_file
+
 # ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="Multi-Bank Form Parser", layout="wide")
 
@@ -2214,7 +3675,7 @@ if st.session_state.logged_in:
     # Multi-bank dropdown with ALL 5 banks
     bank_option = st.sidebar.selectbox(
         "Select Bank Form Type:",
-        ["Meezan Bank", "MCB Bank", "Allied Bank", "Alfalah Bank", "Askari Bank", "MCB Redemption C-1", "MCB Early Redemption","Custom Form"],
+        ["Meezan Bank", "Al Meezan Multi Page Form","MCB Bank", "Allied Bank", "Alfalah Bank", "Askari Bank", "MCB Redemption C-1", "MCB Early Redemption","Custom Form"],
         key="bank_selector"
     )
     
@@ -2227,7 +3688,7 @@ if st.session_state.logged_in:
             # Clear previous responses when file changes
             for key in ["meezan_response1", "meezan_response2", "meezan_response3", 
                        "mcb_response", "allied_response", "alfalah_response", 
-                       "askari_response", "mcb_redemption_c1_response", "mcb_early_redemption_response", "custom_response"]:
+                       "askari_response", "mcb_redemption_c1_response", "mcb_early_redemption_response", "al_meezan_package_response","custom_response"]:
                 if key in st.session_state:
                     del st.session_state[key]
         
@@ -2253,6 +3714,8 @@ if st.session_state.logged_in:
         # Process based on selected bank
         if bank_option == "Meezan Bank":
             process_meezan_form(uploaded_file, col2)
+        elif bank_option == "Al Meezan Multi Page Form":
+            process_al_meezan_package(uploaded_file, col2)
         elif bank_option == "MCB Bank":
             process_mcb_form(uploaded_file, col2)
         elif bank_option == "Allied Bank":
