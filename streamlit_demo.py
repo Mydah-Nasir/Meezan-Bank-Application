@@ -2343,7 +2343,29 @@ def process_al_meezan_package(uploaded_file, col2):
     """Process Al Meezan Full Package with detailed extraction"""
     st.markdown("## 🏦 Al Meezan - Forms Package")
     st.info("Extracting 3 Forms from Package")
-    
+    try:
+        current_hash = file_hash(uploaded_file)
+    except Exception:
+        current_hash = None
+
+    # If we've already extracted for this uploaded file (and hash matches), reuse cached data
+    if current_hash and st.session_state.get("al_meezan_file_hash") == current_hash and "al_meezan_extracted_data" in st.session_state:
+        extracted_data = st.session_state["al_meezan_extracted_data"]
+        # ensure PDF path exists (generate if missing)
+        if "al_meezan_pdf_path" not in st.session_state:
+            try:
+                # combine the three forms into one dict for PDF generation
+                combined = {}
+                combined.update(extracted_data.get("account_opening", {}))
+                combined.update(extracted_data.get("fatca", {}))
+                combined.update(extracted_data.get("crs", {}))
+                pdf_path = save_al_meezan_package_to_pdf(combined)
+                st.session_state["al_meezan_pdf_path"] = pdf_path
+            except Exception:
+                pass
+
+        display_al_meezan_package_tabbed(extracted_data, None, col2)
+        return
     # Convert PDF to images
     with st.spinner("📄 Converting PDF to images..."):
         pdf_images = convert_pdf_to_images(uploaded_file)
@@ -2615,6 +2637,20 @@ def process_al_meezan_package(uploaded_file, col2):
     progress_bar.empty()
     status_text.text("✅ Form identification complete!")
     
+    # persist extracted data + pdf path + file hash to session so download / rerun doesn't re-run extraction
+    st.session_state["al_meezan_extracted_data"] = extracted_data
+    if current_hash:
+        st.session_state["al_meezan_file_hash"] = current_hash
+
+    try:
+        combined = {}
+        combined.update(extracted_data.get("account_opening", {}))
+        combined.update(extracted_data.get("fatca", {}))
+        combined.update(extracted_data.get("crs", {}))
+        pdf_path = save_al_meezan_package_to_pdf(combined)
+        st.session_state["al_meezan_pdf_path"] = pdf_path
+    except Exception:
+        pass
     # Display results in tabs
     display_al_meezan_package_tabbed(extracted_data, form_prompts, col2)
 
@@ -2633,7 +2669,7 @@ def identify_form_on_page(image, form_prompts, page_num):
         Respond with ONLY the form number (1, 2, or 3). If none match, respond with "0".
         """
         
-        response = call_openai_api_with_image_single(image, id_prompt, page_num)
+        response = call_qwen_api_with_image_single(image, id_prompt, page_num)
         
         if response:
             response = response.strip()
@@ -2667,7 +2703,7 @@ def extract_form_data(image, prompt, page_num):
         5. No explanations, no extra text
         """
         
-        return call_openai_api_with_image_single(image, strict_prompt, page_num)
+        return call_qwen_api_with_image_single(image, strict_prompt, page_num)
         
     except Exception as e:
         st.error(f"Error extracting form data from page {page_num}: {str(e)}")
@@ -3688,7 +3724,7 @@ if st.session_state.logged_in:
             # Clear previous responses when file changes
             for key in ["meezan_response1", "meezan_response2", "meezan_response3", 
                        "mcb_response", "allied_response", "alfalah_response", 
-                       "askari_response", "mcb_redemption_c1_response", "mcb_early_redemption_response", "al_meezan_package_response","custom_response"]:
+                       "askari_response", "mcb_redemption_c1_response", "mcb_early_redemption_response", "al_meezan_package_response","custom_response", "al_meezan_extracted_data", "al_meezan_pdf_path", "al_meezan_edited_data", "al_meezan_file_hash"]:
                 if key in st.session_state:
                     del st.session_state[key]
         
