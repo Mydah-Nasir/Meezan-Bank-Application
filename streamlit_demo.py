@@ -25,6 +25,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.lib.styles import ParagraphStyle
 import hashlib
 import requests
+from PIL import Image
 # import pytesseract
 # from pytesseract import Output
 # pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
@@ -2179,13 +2180,27 @@ def call_qwen_api_with_image_single(image, prompt, page_num,
         return None
 
 # Page number (1-based) → form key
-AL_MEEZAN_PAGE_FORM_MAP = {
-    1: "account_opening",
-    2: "account_opening",
-    3: "account_opening",
-    4: "fatca",
-    5: "crs",
+AL_MEEZAN_PAGE_GROUPS = {
+    "account_opening": [1, 2, 3],
+    "fatca": [4],
+    "crs": [5],
 }
+
+
+def merge_images_vertically(images):
+    widths, heights = zip(*(img.size for img in images))
+    total_height = sum(heights)
+    max_width = max(widths)
+
+    merged = Image.new("RGB", (max_width, total_height), color="white")
+
+    y_offset = 0
+    for img in images:
+        merged.paste(img, (0, y_offset))
+        y_offset += img.height
+
+    return merged
+
 
 def get_account_opening_prompt_by_page(page_num, base_prompt):
     if page_num == 1:
@@ -2386,10 +2401,10 @@ def process_al_meezan_package(uploaded_file, col2):
             SECTION 1: ACCOUNT INFORMATION
             - Customer ID: 
             - Portfolio No: 
-            - Date: 
-            - Day: 
-            - Month: 
-            - Year: 
+            - Date: [DD/MM/YYYY]
+            - Day: [DD]
+            - Month: [MM]
+            - Year: [YYYY]
             - Type of Account: 
             
             SECTION 2: PERSONAL DETAILS
@@ -2398,9 +2413,9 @@ def process_al_meezan_package(uploaded_file, col2):
             - Father's/Husband's Name: 
             - Mother's Maiden Name: 
             - CNIC/NICOP/Passport No: 
-            - Issuance Date: 
-            - Expiry Date: 
-            - Date of Birth: 
+            - Issuance Date: [DD/MM/YYYY]
+            - Expiry Date: [DD/MM/YYYY]
+            - Date of Birth: [DD/MM/YYYY]
             - Marital Status: 
             - Religion: 
             - Place of Birth: 
@@ -2592,31 +2607,40 @@ def process_al_meezan_package(uploaded_file, col2):
     progress_bar = st.progress(0)
     status_text = st.empty()
     
-    for page_num, image in enumerate(pdf_images):
-        page_index = page_num + 1
-        status_text.text(f"🔍 Processing page {page_index}...")
+    total_groups = len(AL_MEEZAN_PAGE_GROUPS)
+    completed = 0
 
-        # Enforce exactly 5 pages
-        if page_index not in AL_MEEZAN_PAGE_FORM_MAP:
-            st.warning(f"⚠️ Unexpected page {page_index} skipped")
+    for form_key, pages in AL_MEEZAN_PAGE_GROUPS.items():
+        status_text.text(f"🔍 Processing {form_key.upper()} pages {pages}...")
+
+        # Collect images for this form
+        images = []
+        for p in pages:
+            if p <= len(pdf_images):
+                images.append(pdf_images[p - 1])
+
+        if not images:
             continue
 
-        form_key = AL_MEEZAN_PAGE_FORM_MAP[page_index]
+        # Merge pages into ONE image
+        merged_image = merge_images_vertically(images)
+
         form_config = form_prompts[form_key]
 
-        # Select correct prompt
+        # Prompt handling
         if form_key == "account_opening":
             prompt = get_account_opening_prompt_by_page(
-                page_index,
+                "1-3",
                 form_config["prompt"]
             )
         else:
             prompt = form_config["prompt"]
 
+        # 🔥 SINGLE QWEN CALL HERE
         extracted = extract_form_data(
-            image=image,
+            image=merged_image,
             prompt=prompt,
-            page_num=page_index
+            page_num=str(pages)
         )
 
         if extracted:
@@ -2627,11 +2651,12 @@ def process_al_meezan_package(uploaded_file, col2):
                     extracted_data[form_key][field] = value
 
             st.success(
-                f"✅ Page {page_index}: {form_config['name']} "
-                f"({len(parsed)} fields extracted)"
+                f"✅ {form_config['name']} "
+                f"(Pages {pages}) — {len(parsed)} fields extracted"
             )
 
-        progress_bar.progress(page_index / len(pdf_images))
+        completed += 1
+        progress_bar.progress(completed / total_groups)
 
     
     progress_bar.empty()
