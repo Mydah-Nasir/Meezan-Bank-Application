@@ -308,6 +308,8 @@ def call_openai_api_with_image(image_file, prompt=None, model="gpt-4o"):
         response = client.chat.completions.create(
             model=model,
             messages=messages,
+            temperature = 0.0,
+
         )
 
         reply = response.choices[0].message.content
@@ -379,6 +381,9 @@ def call_qwen_model_with_image(image_file, prompt=None, model="Qwen/Qwen2.5-VL-7
         response = client.chat.completions.create(
             model=model,
             messages=messages,
+            temperature = 0.0,
+            top_p = 0.9
+
         )
 
         reply = response.choices[0].message.content
@@ -442,7 +447,7 @@ def parse_mcb_redemption_c1(response_text: str) -> dict:
     # Section 2: Redemption Details
     redemption_fields = [
         "Name of the Fund / Investment Plan", "Type of Units", "Class of Units",
-        "No. of Units", "Amount", "In Words", "In Figures (Rs)", "Certificates Issued"
+        "No. of Units", "Amount", "Certificates Issued"
     ]
     
     for field in redemption_fields:
@@ -787,7 +792,7 @@ def save_mcb_redemption_c1_to_pdf(form_data):
     y -= 20
     c.setFont("Helvetica", 10)
     redemption_fields = ["Name of the Fund / Investment Plan", "Type of Units", "Class of Units", 
-                        "No. of Units", "Amount", "In Words", "In Figures (Rs)"]
+                        "No. of Units", "Amount", "Certificates Issued"]
     for field in redemption_fields:
         if field in form_data:
             c.drawString(40, y, f"{field}: {form_data[field]}")
@@ -896,7 +901,7 @@ def process_mcb_redemption_c1(uploaded_file, col2):
     - Type of Units
     - Class of Units
     - No. of Units
-    - Amount (in Figures and in Words)
+    - Amount
     - Certificates Issued (Yes/No, if yes Certificate No.)
 
     CDS ACCOUNT DETAILS:
@@ -1997,46 +2002,136 @@ def process_alfalah_form(uploaded_file, col2):
 def process_askari_form(uploaded_file, col2):
     """Process Askari Bank form"""
     askari_prompt = """
-    Extract ALL information from this Askari Investment Management Account Opening Form. Focus on these specific sections:
+    You are an OCR and form-structure extraction system.
+Your task is to extract information ONLY from what is clearly visible on the provided image of an
+“Askari Investment Management – Account Opening Form”.
 
-    DATE INFORMATION:
-    - DATE (Day/Month/Year)
+CRITICAL RULES (MUST FOLLOW):
+1. Do NOT guess, infer, assume, or auto-complete any information.
+2. Do NOT hallucinate checkbox selections.
+3. A checkbox value should be marked ONLY if a visible tick (✔ / ✓) or clear mark is present.
+4. If a field is blank, unclear, overwritten, or not visible, write exactly: "Not provided".
+5. Extract text EXACTLY as written (including spelling, spacing, and capitalization).
+6. Do NOT add explanations, summaries, or interpretations.
 
-    SECTION 1: INFORMATION ABOUT THE PRINCIPAL ACCOUNT HOLDER
-    - Full Name
-    - Father's/Husband's Name
-    - Mailing Address
-    - TYPE OF INSTITUTION (Individual/Corporate/Institution)
-    - CNIC
-    - E-mail
-    - Mobile No.
-    - Nationality
-    - Marital Status (Single/Married)
-    - Country
-    - Gender (Male/Female)
-    - Zakat Deduction (Yes/No)
-    - Date of Birth
+-------------------------
+OUTPUT FORMAT (STRICT)
+-------------------------
 
-    SECTION 2: JOINT ACCOUNT HOLDERS (if any)
-    - Extract any information about joint account holders
+Return the output as a VALID JSON object using the exact structure and keys below.
+Do NOT add extra keys.
+Do NOT remove keys.
+Do NOT change key names.
 
-    SECTION 3: NOMINEE INFORMATION (if any)
-    - Extract any information about nominees
+{
+  "document_info": {
+    "document_title": "",
+    "date": {
+      "day": "",
+      "month": "",
+      "year": ""
+    }
+  },
 
-    SECTION 4: OPERATING INSTRUCTIONS
-    - Operating Instructions (Solely/Jointly/etc.)
-    - Who can operate the account
+  "section_1_principal_account_holder": {
+    "full_name": "",
+    "father_or_husband_name": "",
+    "mailing_address": "",
+    "type_of_institution": {
+      "individual": "",
+      "company": "",
+      "partnership": "",
+      "ngo": "",
+      "trust": "",
+      "others": ""
+    },
+    "cnic": "",
+    "email": "",
+    "mobile_no": "",
+    "nationality": "",
+    "marital_status": {
+      "single": "",
+      "married": ""
+    },
+    "country": "",
+    "gender": {
+      "male": "",
+      "female": ""
+    },
+    "zakat_deduction": {
+      "yes": "",
+      "no": ""
+    },
+    "date_of_birth": ""
+  },
 
-    SECTION 5: OTHER INSTRUCTIONS
-    - Payment to be sent on registered address (Yes/No)
-    - Dividend Distribution option (Reinvest Dividend/Credit to Bank Account/Pay by Cheque)
+  "section_1_bank_account_details": {
+    "title_of_account": "",
+    "bank_account_number": "",
+    "bank_name": "",
+    "branch": "",
+    "bank_address": "",
+    "bank_telephone_no": ""
+  },
 
-    SECTION 6: DECLARATION
-    - Principal/Authorised Signatory
-    - Name
+  "section_2_joint_account_holders": [
+    {
+      "name": "",
+      "cnic_or_passport_no": ""
+    }
+  ],
 
-    Extract all text exactly as it appears on the form. If a section is blank, mark it as "Not provided".
-    Present the information in a structured format with clear section headings.
+  "section_3_nominee_information": [
+    {
+      "name": "",
+      "relationship_with_principal": "",
+      "cnic_no": "",
+      "percentage": ""
+    }
+  ],
+
+  "section_4_operating_instructions": {
+    "solely": "",
+    "principal_account_holder": "",
+    "jointly_any_two": "",
+    "jointly_all": "",
+    "either_or_survivor": "",
+    "others": ""
+  },
+
+  "section_5_other_instructions": {
+    "payment_sent_to_registered_address": {
+      "yes": "",
+      "no": ""
+    },
+    "dividend_distribution_option": {
+      "provide_cash": "",
+      "reinvest_dividend": ""
+    },
+    "special_instructions": ""
+  },
+
+  "section_6_declaration": {
+    "principal_signatory_name": "",
+    "principal_signatory_signature_present": "",
+    "authorized_signatory_name": "",
+    "authorized_signatory_signature_present": ""
+  }
+}
+
+-------------------------
+CHECKBOX OUTPUT RULE
+-------------------------
+For checkboxes:
+- If checked → write "Checked"
+- If unchecked or empty → write "Not provided"
+
+-------------------------
+FINAL REMINDER
+-------------------------
+If something is not clearly visible on the form image, write "Not provided".
+Return ONLY the JSON output and nothing else.
+
     """
     
     response_key = "askari_response"
@@ -2694,7 +2789,7 @@ def identify_form_on_page(image, form_prompts, page_num):
         Respond with ONLY the form number (1, 2, or 3). If none match, respond with "0".
         """
         
-        response = call_qwen_api_with_image_single(image, id_prompt, page_num)
+        response = call_openai_api_with_image_single(image, id_prompt, page_num)
         
         if response:
             response = response.strip()
@@ -2728,7 +2823,7 @@ def extract_form_data(image, prompt, page_num):
         5. No explanations, no extra text
         """
         
-        return call_qwen_api_with_image_single(image, strict_prompt, page_num)
+        return call_openai_api_with_image_single(image, strict_prompt, page_num)
         
     except Exception as e:
         st.error(f"Error extracting form data from page {page_num}: {str(e)}")
