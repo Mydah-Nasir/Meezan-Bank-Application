@@ -308,8 +308,6 @@ def call_openai_api_with_image(image_file, prompt=None, model="gpt-4o"):
         response = client.chat.completions.create(
             model=model,
             messages=messages,
-            temperature = 0.0,
-
         )
 
         reply = response.choices[0].message.content
@@ -2300,68 +2298,153 @@ def merge_images_vertically(images):
 def get_account_opening_prompt_by_page(page_num, base_prompt):
     if page_num == 1:
         return """
-        Extract ONLY the following sections from the INVESTOR ACCOUNT OPENING FORM:
+        Extract ONLY the following sections from the INVESTOR ACCOUNT OPENING FORM FOR INDIVIDUAL (Page 1).
 
+        Extract ALL fields exactly as written.
+        For checkboxes, return ONLY the selected option.
+        If nothing is selected, write: Not Selected
+        Format strictly as:
+        Field Name: Value
+
+
+        ========================
         SECTION 1: ACCOUNT INFORMATION
-            - Customer ID: 
-            - Portfolio No: 
-            - Date: 
-            - Day: 
-            - Month: 
-            - Year: 
-            - Type of Account: 
-            
-        SECTION 2: PERSONAL DETAILS
-        - Name: 
-        - Title (Mr./Mrs./Ms.): 
-        - Father's/Husband's Name: 
-        - Mother's Maiden Name: 
-        - CNIC/NICOP/Passport No: 
-        - Issuance Date: 
-        - Expiry Date: 
-        - Date of Birth: 
-        - Marital Status: 
-        - Religion: 
-        - Place of Birth: 
-        - Nationality: 
-        - Dual Nationality: 
-        
+        ========================
+        - Customer ID:
+        - Portfolio No:
+        - Day:
+        - Month:
+        - Year:
+        - Type of Account: [Single / Joint / Minor / MTPF]
+
+
+        ========================
+        SECTION 2: PRINCIPAL ACCOUNT HOLDER
+        ========================
+        - Name:
+        - Title (Mr./Mrs./Ms.):
+        - Father's/Husband's Name:
+        - Mother's Maiden Name:
+        - CNIC/NICOP/Passport No:
+        - Issuance Date:
+        - Expiry Date:
+        - Marital Status: [Single / Married]
+        - Religion: [Muslim / Non Muslim]
+        - Place of Birth:
+        - Date of Birth:
+        - Nationality:
+        - Dual Nationality: [Yes / No]
+        - If Yes, specify:
+
+
+        ========================
         SECTION 3: ADDRESSES
-        - Mailing Address: 
-        - Mailing City: 
-        - Mailing Country: 
-        - Current Address: 
-        - Current City: 
-        - Current Country: 
-        
-        SECTION 4: CONTACT DETAILS
-        - Residential Status: 
-        - Email: 
-        - Mobile: 
-        - Mobile Network: 
-        - Tel/Res Office: 
-        
-        SECTION 5: BANK DETAILS
-        - Bank Account No: 
-        - Bank Name: 
-        - Branch: 
-        - City: 
-        
-        SECTION 6: SPECIAL INSTRUCTIONS
-        - Account Operating Instructions: 
-        - Dividend Mandate: 
-        - Communication Mode: 
-        - Stock Dividend: 
+        ========================
+        - Mailing Address:
+        - Mailing City:
+        - Mailing Country:
+        - Current Address (as per CNIC):
+        - Current City:
+        - Current Country:
 
-        SECTION 7: DETAIL ABOUT MEEZAN TAHAFFUZ PENSION FUND (MTPF) ACCOUNT
-        - Expected Retirement Date (DD/MM/YYYY): 
-        - Note for Pension Fund investments over Rs. 3 million: 
-        
-        SECTION 8: ALLOCATION SCHEME SELECTION
-        - Selected Allocation Scheme: [Extract the checked option only]
 
-        IMPORTANT: Extract ALL fields exactly as they appear. For checkboxes, write the SELECTED option only.
-        Format: Field Name: Value
+        ========================
+        SECTION 4: RESIDENTIAL STATUS
+        ========================
+        - Residential Status:
+        [Pakistan Resident / Non-Resident / Resident Foreign National / Non-Resident Foreign National]
+
+
+        ========================
+        SECTION 5: CONTACT DETAILS
+        ========================
+        - Email:
+        - Tel Res/Office:
+        - Mobile:
+        - Mobile Network:
+
+
+        ========================
+        SECTION 6: IN CASE OF MINOR ACCOUNT
+        ========================
+        - Name of Guardian:
+        - Relation with Principal:
+        - Guardian CNIC:
+        - Guardian CNIC Expiry Date:
+
+
+        ========================
+        SECTION 7: BANK ACCOUNT DETAIL OF PRINCIPAL ACCOUNT HOLDER
+        (For Redemption and Dividend Payments)
+        ========================
+        - Bank Account No (IBAN preferred):
+        - Bank Name:
+        - Branch:
+        - City:
+
+
+        ========================
+        SECTION 8: JOINT ACCOUNT HOLDERS
+        ========================
+
+        ---- Joint Holder 1 ----
+        - Joint Holder 1 Name:
+        - Relation with Principal:
+        - Customer ID (if any):
+        - CNIC/NICOP/Passport:
+        - Issuance Date:
+        - Expiry Date:
+
+        ---- Joint Holder 2 ----
+        - Joint Holder 2 Name:
+        - Relation with Principal:
+        - Customer ID (if any):
+        - CNIC/NICOP/Passport:
+        - Issuance Date:
+        - Expiry Date:
+
+
+        ========================
+        SECTION 9: SPECIAL INSTRUCTIONS
+        ========================
+        - Account Operating Instructions:
+        [Principal Account Holder Only / Either or Survivor / Any Two / All]
+
+        - Dividend Mandate:
+        [Cash / Reinvest]
+
+        - Stock Dividend:
+        [Issue Bonus Units / Encash Bonus Units]
+
+        - Communication Mode:
+        [Electronic Only / Physical Communication]
+
+
+        ========================
+        SECTION 10: DETAIL ABOUT MEEZAN TAHAFFUZ PENSION FUND (MTPF)
+        ========================
+        - Expected Retirement Date (DD/MM/YYYY):
+        - Note for Pension Fund investments over Rs. 3 million:
+
+
+        ========================
+        SECTION 11: ALLOCATION SCHEME SELECTION
+        (Extract ONLY the checked option)
+        ========================
+        - Selected Allocation Scheme:
+        [High Volatility /
+        High Volatility with Gold /
+        Medium Volatility /
+        Medium Volatility with Gold /
+        Low Volatility /
+        Low Volatility with Gold /
+        Lower Volatility /
+        Lower Volatility with Gold /
+        Life Cycle Plan /
+        100% Debt /
+        100% Equity /
+        100% Money Market /
+        100% Gold]
         """
 
     elif page_num == 2:
@@ -2538,71 +2621,94 @@ def process_al_meezan_package(uploaded_file, col2):
             - Branch: 
             - City: 
             
-            SECTION 6: SPECIAL INSTRUCTIONS
+            SECTION 6: IN CASE OF MINOR ACCOUNT
+            - Name of Guardian:
+            - Relation with Principal:
+            - Guardian CNIC:
+            - Guardian CNIC Expiry Date:
+
+            SECTION 7: JOINT ACCOUNT HOLDERS
+            ---- Joint Holder 1 ----
+            - Joint Holder 1 Name:
+            - Relation with Principal:
+            - Customer ID (if any):
+            - CNIC/NICOP/Passport:
+            - Issuance Date:
+            - Expiry Date:
+
+            ---- Joint Holder 2 ----
+            - Joint Holder 2 Name:
+            - Relation with Principal:
+            - Customer ID (if any):
+            - CNIC/NICOP/Passport:
+            - Issuance Date:
+            - Expiry Date:
+
+            SECTION 8: SPECIAL INSTRUCTIONS
             - Account Operating Instructions: 
             - Dividend Mandate: 
             - Communication Mode: 
             - Stock Dividend: 
 
-            SECTION 7: DETAIL ABOUT MEEZAN TAHAFFUZ PENSION FUND (MTPF) ACCOUNT
+            SECTION 9: DETAIL ABOUT MEEZAN TAHAFFUZ PENSION FUND (MTPF) ACCOUNT
             - Expected Retirement Date (DD/MM/YYYY): 
             - Note for Pension Fund investments over Rs. 3 million: 
             
-            SECTION 8: ALLOCATION SCHEME SELECTION
+            SECTION 10: ALLOCATION SCHEME SELECTION
             - Selected Allocation Scheme: [Extract the checked option only]
             
-            SECTION 9: SOURCE OF INCOME & WEALTH
+            SECTION 11: SOURCE OF INCOME & WEALTH
             - Source of Income: 
             - Source of Wealth: 
             - Name of Employer/Business (if Applicable): 
             - Designation: 
             - Nature of Business: 
             
-            SECTION 10: EDUCATION & GEOGRAPHY
+            SECTION 12: EDUCATION & GEOGRAPHY
             - Education: 
             - Geographies involved: 
             - Type of Counterparties: 
             
-            SECTION 11: TRANSACTION DETAILS
+            SECTION 13: TRANSACTION DETAILS
             - Possible Modes of Transactions: 
             - Expected Turnover in Account: 
             - Expected Amount of Investment: 
             - Annual Income: 
             - Expected No. of Transactions: 
             
-            SECTION 12: RISK ASSESSMENT
+            SECTION 14: RISK ASSESSMENT
             - Age Group: 
             - Risk-Return Tolerance: 
             - Monthly Savings: 
             - Occupation: 
             
-            SECTION 13: INVESTMENT KNOWLEDGE
+            SECTION 15: INVESTMENT KNOWLEDGE
             - Investment Knowledge Level: 
             - Investment Objective: 
             - Investment Horizon: 
             
-            SECTION 14: INVESTOR PORTFOLIO CALCULATION
+            SECTION 16: INVESTOR PORTFOLIO CALCULATION
             - Total Score: 
             - Recommended Portfolio: 
             - Calculated ideal Portfolio: 
         
-            SECTION 15: NEXT OF KIN
+            SECTION 17: NEXT OF KIN
             - Next of Kin Name: 
             - Next of Kin Contact: 
             - Next of Kin Address: 
             
-            SECTION 16: BENEFICIARY DETAILS
+            SECTION 18: BENEFICIARY DETAILS
             - Ultimate Beneficiary Name: 
             - Relation with Customer: 
             - Beneficiary CNIC/NICOP/Passport No: 
        
-            SECTION 17: GUIDELINES FOR INVESTORS
+            SECTION 19: GUIDELINES FOR INVESTORS
             - Guidelines Read and Understood: [Yes/No]
             
-            SECTION 18: NOTE AND DECLARATION
+            SECTION 20: NOTE AND DECLARATION
             - Declaration Signed: [Yes/No]
             
-            SECTION 19: APPLICATION CHECKLIST
+            SECTION 21: APPLICATION CHECKLIST
             - CNIC Copy Attached: [Yes/No]
             - Business/Employment Proof Attached: [Yes/No]
             - Zakat Declaration Attached: [Yes/No]
@@ -2610,7 +2716,7 @@ def process_al_meezan_package(uploaded_file, col2):
             - CRS Form Attached: [Yes/No]
             - Health Questionnaire Attached: [Yes/No]
             
-            SECTION 20: SALES INFORMATION
+            SECTION 22: SALES INFORMATION
             - Sales Person's Name: 
             - Manager's Name: 
             - Distributor Stamp: [Present/Absent]
@@ -2717,38 +2823,46 @@ def process_al_meezan_package(uploaded_file, col2):
         if not images:
             continue
 
-        # Merge pages into ONE image
-        merged_image = merge_images_vertically(images)
-
         form_config = form_prompts[form_key]
 
-        # Prompt handling
-        if form_key == "account_opening":
-            prompt = get_account_opening_prompt_by_page(
-                "1-3",
-                form_config["prompt"]
+        for idx, page_number in enumerate(pages):
+
+            if page_number > len(pdf_images):
+                continue
+
+            page_image = pdf_images[page_number - 1]
+
+            # 🔥 Get page-specific prompt for Account Opening
+            if form_key == "account_opening":
+                prompt = get_account_opening_prompt_by_page(
+                    idx + 1,  # 1, 2, 3
+                    form_config["prompt"]
+                )
+            else:
+                prompt = form_config["prompt"]
+
+            status_text.text(
+                f"🔍 Processing {form_key.upper()} - Page {page_number}"
             )
-        else:
-            prompt = form_config["prompt"]
 
-        # 🔥 SINGLE QWEN CALL HERE
-        extracted = extract_form_data(
-            image=merged_image,
-            prompt=prompt,
-            page_num=str(pages)
-        )
-
-        if extracted:
-            parsed = parse_al_meezan_detailed_response(extracted)
-
-            for field, value in parsed.items():
-                if value and value not in ["", "BLANK", "N/A"]:
-                    extracted_data[form_key][field] = value
-
-            st.success(
-                f"✅ {form_config['name']} "
-                f"(Pages {pages}) — {len(parsed)} fields extracted"
+            # 🔥 ONE QWEN CALL PER PAGE
+            extracted = extract_form_data(
+                image=page_image,
+                prompt=prompt,
+                page_num=str(page_number)
             )
+            print('Extracted Information',extracted)
+            if extracted:
+                parsed = parse_al_meezan_detailed_response(extracted)
+
+                for field, value in parsed.items():
+                    if value and value not in ["", "BLANK", "N/A"]:
+                        extracted_data[form_key][field] = value
+
+                st.success(
+                    f"✅ {form_config['name']} "
+                    f"(Page {page_number}) — {len(parsed)} fields extracted"
+                )
 
         completed += 1
         progress_bar.progress(completed / total_groups)
