@@ -13,7 +13,6 @@ import subprocess
 from openai import OpenAI
 import re
 import numpy as np
-import pandas as pd
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
@@ -316,6 +315,340 @@ def call_openai_api_with_image(image_file, prompt=None, model="gpt-4o"):
 
     except Exception as e:
         st.error(f"Error using OpenAI GPT-4o API: {str(e)}")
+        return None
+
+def call_openai_api_with_image_askari(image_file, prompt=None, model="gpt-4o"):
+    """Call OpenAI GPT-4o API with Streamlit-uploaded image/PDF and text prompt."""
+    """
+    Call OpenAI Responses API for strict OCR + form-structure extraction.
+    - No hallucination
+    - Schema-locked JSON output
+    - Vision-grounded
+    """
+    ACCOUNT_OPENING_FORM_SCHEMA = {
+    "name": "askari_investment_account_opening_form",
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+
+            "document_info": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "document_title": { "type": "string" },
+                    "date": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "day": { "type": "string" },
+                            "month": { "type": "string" },
+                            "year": { "type": "string" }
+                        },
+                        "required": ["day", "month", "year"]
+                    }
+                },
+                "required": ["document_title", "date"]
+            },
+
+            "section_1_principal_account_holder": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "full_name": { "type": "string" },
+                    "father_or_husband_name": { "type": "string" },
+                    "mailing_address": { "type": "string" },
+
+                    "type_of_institution": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "company": { "type": "string" },
+                            "partnership": { "type": "string" },
+                            "ngo": { "type": "string" },
+                            "trust": { "type": "string" },
+                            "others": { "type": "string" }
+                        },
+                        "required": [
+                            "company",
+                            "partnership",
+                            "ngo",
+                            "trust",
+                            "others"
+                        ]
+                    },
+
+                    "cnic": { "type": "string" },
+                    "email": { "type": "string" },
+                    "mobile_no": { "type": "string" },
+                    "nationality": { "type": "string" },
+
+                    "marital_status": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "single": { "type": "string" },
+                            "married": { "type": "string" }
+                        },
+                        "required": ["single", "married"]
+                    },
+
+                    "country": { "type": "string" },
+
+                    "gender": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "male": { "type": "string" },
+                            "female": { "type": "string" }
+                        },
+                        "required": ["male", "female"]
+                    },
+
+                    "zakat_deduction": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "yes": { "type": "string" },
+                            "no": { "type": "string" }
+                        },
+                        "required": ["yes", "no"]
+                    },
+
+                    "date_of_birth": { "type": "string" }
+                },
+                "required": [
+                    "full_name",
+                    "father_or_husband_name",
+                    "mailing_address",
+                    "type_of_institution",
+                    "cnic",
+                    "email",
+                    "mobile_no",
+                    "nationality",
+                    "marital_status",
+                    "country",
+                    "gender",
+                    "zakat_deduction",
+                    "date_of_birth"
+                ]
+            },
+
+            "section_1_bank_account_details": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "title_of_account": { "type": "string" },
+                    "bank_account_number": { "type": "string" },
+                    "bank_name": { "type": "string" },
+                    "branch": { "type": "string" },
+                    "bank_address": { "type": "string" },
+                    "bank_telephone_no": { "type": "string" }
+                },
+                "required": [
+                    "title_of_account",
+                    "bank_account_number",
+                    "bank_name",
+                    "branch",
+                    "bank_address",
+                    "bank_telephone_no"
+                ]
+            },
+
+            "section_2_joint_account_holders": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "name": { "type": "string" },
+                        "cnic_or_passport_no": { "type": "string" }
+                    },
+                    "required": ["name", "cnic_or_passport_no"]
+                }
+            },
+
+            "section_3_nominee_information": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "name": { "type": "string" },
+                        "relationship_with_principal": { "type": "string" },
+                        "cnic_no": { "type": "string" },
+                        "percentage": { "type": "string" }
+                    },
+                    "required": [
+                        "name",
+                        "relationship_with_principal",
+                        "cnic_no",
+                        "percentage"
+                    ]
+                }
+            },
+
+            "section_4_operating_instructions": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "solely": { "type": "string" },
+                    "principal_account_holder": { "type": "string" },
+                    "jointly_any_two": { "type": "string" },
+                    "jointly_all": { "type": "string" },
+                    "either_or_survivor": { "type": "string" },
+                    "others": { "type": "string" }
+                },
+                "required": [
+                    "solely",
+                    "principal_account_holder",
+                    "jointly_any_two",
+                    "jointly_all",
+                    "either_or_survivor",
+                    "others"
+                ]
+            },
+
+            "section_5_other_instructions": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "payment_sent_to_registered_address": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "yes": { "type": "string" },
+                            "no": { "type": "string" }
+                        },
+                        "required": ["yes", "no"]
+                    },
+                    "dividend_distribution_option": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "provide_cash": { "type": "string" },
+                            "reinvest_dividend": { "type": "string" }
+                        },
+                        "required": [
+                            "provide_cash",
+                            "reinvest_dividend"
+                        ]
+                    },
+                    "special_instructions": { "type": "string" }
+                },
+                "required": [
+                    "payment_sent_to_registered_address",
+                    "dividend_distribution_option",
+                    "special_instructions"
+                ]
+            },
+
+            "section_6_declaration": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "principal_signatory_name": { "type": "string" },
+                    "principal_signatory_signature_present": { "type": "string" },
+                    "authorized_signatory_name": { "type": "string" },
+                    "authorized_signatory_signature_present": { "type": "string" }
+                },
+                "required": [
+                    "principal_signatory_name",
+                    "principal_signatory_signature_present",
+                    "authorized_signatory_name",
+                    "authorized_signatory_signature_present"
+                ]
+            }
+        },
+        "required": [
+            "document_info",
+            "section_1_principal_account_holder",
+            "section_1_bank_account_details",
+            "section_2_joint_account_holders",
+            "section_3_nominee_information",
+            "section_4_operating_instructions",
+            "section_5_other_instructions",
+            "section_6_declaration"
+        ]
+    }
+    }
+    try:
+        client = OpenAI(api_key=api_key)
+
+        # -----------------------------
+        # STRICT OCR PROMPT
+        # -----------------------------
+        default_prompt = (
+            "You are an OCR and form-structure extraction system.\n"
+            "CRITICAL RULES:\n"
+            "1. Do NOT guess, infer, or assume any information.\n"
+            "2. Extract ONLY what is clearly visible in the image.\n"
+            "3. If a field is blank, unclear, or not visible, write exactly: \"Not provided\".\n"
+            "4. Checkboxes must be marked ONLY if a visible tick (✔ / ✓) is present.\n"
+            "5. Extract text EXACTLY as written (preserve spelling, spacing, and capitalization).\n"
+            "6. Return ONLY valid JSON matching the provided schema.\n"
+        )
+
+        effective_prompt = prompt.strip() if prompt else default_prompt
+
+        # -----------------------------
+        # LOAD IMAGE / PDF
+        # -----------------------------
+        if hasattr(image_file, "type") and image_file.type == "application/pdf":
+            if not PDF_SUPPORT:
+                raise RuntimeError("PDF processing not available")
+
+            pdf_images = convert_pdf_to_images(image_file)
+            if not pdf_images:
+                raise RuntimeError("PDF to image conversion failed")
+
+            image = pdf_images[0]  # first page only
+        else:
+            image = Image.open(image_file)
+
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG", quality=95)
+        image_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+        # -----------------------------
+        # RESPONSES API CALL
+        # -----------------------------
+        response = client.responses.create(
+            model=model,
+            temperature=0,
+            top_p=1,
+            max_output_tokens=4000,
+            response_format={
+                "type": "json_schema",
+                "json_schema": ACCOUNT_OPENING_FORM_SCHEMA
+            },
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": effective_prompt
+                        },
+                        {
+                            "type": "input_image",
+                            "image_base64": image_base64
+                        }
+                    ]
+                }
+            ]
+        )
+
+        # -----------------------------
+        # RETURN JSON OUTPUT
+        # -----------------------------
+        return response.output_parsed
+
+    except Exception as e:
+        print(f"OpenAI OCR error: {str(e)}")
         return None
 
 def call_qwen_model_with_image(image_file, prompt=None, model="Qwen/Qwen2.5-VL-7B-Instruct:hyperbolic"):
@@ -2036,7 +2369,6 @@ Do NOT change key names.
     "father_or_husband_name": "",
     "mailing_address": "",
     "type_of_institution": {
-      "individual": "",
       "company": "",
       "partnership": "",
       "ngo": "",
@@ -2135,7 +2467,7 @@ Return ONLY the JSON output and nothing else.
     response_key = "askari_response"
     if response_key not in st.session_state:
         with st.spinner("Extracting data from Askari Bank form..."):
-            response = call_openai_api_with_image(uploaded_file, askari_prompt)
+            response = call_openai_api_with_image_askari(uploaded_file, askari_prompt)
             st.session_state[response_key] = response
     
     if response_key in st.session_state:
